@@ -26,10 +26,12 @@ No commercial EULA for Gru right now. Dual-license / paid Showcase is **deferred
 |----------|---------|
 | [Licensing.md](Licensing.md) | Public MPL summary + ownership |
 | [THIRD_PARTY.md](THIRD_PARTY.md) | Third-party credit checklist |
-| [Contributing.md](Contributing.md) | No PRs; forks OK |
-| [Security.md](Security.md) | Security reporting |
+| [Contributing.md](Contributing.md) | No PRs; forks OK (also root `CONTRIBUTING.md`) |
+| [Security.md](Security.md) | Security reporting (also root `SECURITY.md`) |
 | [Governance.md](Governance.md) | Maintainer model |
 | [Support.md](Support.md) | Support channels |
+
+**GitHub community tabs** use the repository-root `CONTRIBUTING.md` and `SECURITY.md` files.
 
 **Credits for GitHub README:** repository [`README.md`](../../README.md) · root [`NOTICE`](../../NOTICE)
 

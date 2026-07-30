@@ -1,11 +1,5 @@
 # Security Policy
 
-Canonical GitHub community file: repository root [`SECURITY.md`](../../SECURITY.md).
-
-This folder copy stays for docs navigation; keep it aligned with the root file.
-
----
-
 We take the security of Gru seriously and appreciate the efforts of security researchers who responsibly disclose vulnerabilities.
 
 ## Supported Versions
@@ -45,7 +39,7 @@ When reporting, provide as much detail as possible, including:
 
 This policy applies to the core Gru library and officially maintained components in this repository (`ui/`, `cmd/gru`, sample apps, and public docs).
 
-Third-party dependencies, such as Raylib and WebView2 runtime components, should be reported to their respective maintainers where appropriate. See [THIRD_PARTY.md](THIRD_PARTY.md).
+Third-party dependencies, such as Raylib and WebView2 runtime components, should be reported to their respective maintainers where appropriate. See [docs/licensing/THIRD_PARTY.md](docs/licensing/THIRD_PARTY.md).
 
 ## Our Commitment
 

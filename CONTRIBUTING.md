@@ -1,18 +1,12 @@
 # Contributing to Gru
 
-Canonical GitHub community file: repository root [`CONTRIBUTING.md`](../../CONTRIBUTING.md).
-
-This folder copy stays for docs navigation; keep it aligned with the root file.
-
----
-
 Thank you for your interest in Gru.
 
 ## Pull requests
 
 **This repository does not accept pull requests.**
 
-The project is maintainer-led. The public tree is published for use under **MPL 2.0**, not as a PR-driven community merge target. See [Governance.md](Governance.md).
+The project is maintainer-led. The public tree is published for use under **MPL 2.0**, not as a PR-driven community merge target. See [docs/licensing/Governance.md](docs/licensing/Governance.md).
 
 You are welcome to:
 
@@ -24,7 +18,7 @@ External work that is useful may still be referenced or adapted by the maintaine
 
 ## Using Gru in your app
 
-Prefer consuming Gru as a **Go module** dependency and building your own application (see the public README and Getting Started guide). Packaging helpers ship under `cmd/gru`.
+Prefer consuming Gru as a **Go module** dependency and building your own application (see the [README](README.md) and [Getting Started](docs/GETTING_STARTED.md)). Packaging helpers ship under `cmd/gru`.
 
 ## Non-code help
 

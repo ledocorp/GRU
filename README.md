@@ -1,5 +1,7 @@
 # Gru
 
+**Version:** [0.7.0](https://github.com/ledocorp/GRU/releases/tag/v0.7.0)
+
 **Gru (GRU)** is a Go-first UI toolkit (retained-mode, Raylib-backed) for building desktop applications.
 
 **License:** [Mozilla Public License 2.0](LICENSE)  
@@ -31,14 +33,14 @@ Commercial dual-licensing may come later; it is **not** part of this release.
 ## Module
 
 ```bash
-go get github.com/ledocorp/gru@latest
+go get github.com/ledocorp/gru@v0.7.0
 ```
 
 ```go
 import "github.com/ledocorp/gru/ui"
 ```
 
-Confirm the GitHub org/repo slug matches LedoCorp’s public remote before relying on `@latest`.
+Use `@latest` once you are comfortable tracking the newest tag.
 
 ## Quick start (Windows)
 
@@ -77,7 +79,7 @@ go run ./cmd/gru new myapp --webview
 | **F12** | Inspector |
 | **F11** | Perf overlay (optional) |
 
-**Pull requests are not accepted** on this repository — see [docs/licensing/Contributing.md](docs/licensing/Contributing.md).
+**Pull requests are not accepted** on this repository — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Primary target today: **Windows**.
 
@@ -111,11 +113,11 @@ Gru depends on these projects. Please respect their licenses. Full texts and not
 
 ## Contributing
 
-See [docs/licensing/Contributing.md](docs/licensing/Contributing.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Security
 
-Report security issues per [docs/licensing/Security.md](docs/licensing/Security.md).
+Report security issues per [SECURITY.md](SECURITY.md).
 
 ---
 
