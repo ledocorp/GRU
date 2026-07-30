@@ -9,6 +9,14 @@ This folder is the public docs home for Gru — the same paths ship in the GitHu
 
 ## Reading order
 
+### 0 — Cheatsheet (fingertips)
+
+| Doc | What you get |
+|-----|----------------|
+| [CHEATSHEET.md](CHEATSHEET.md) | Commands, intent index, capability matrices, Status gap tracker |
+
+Use this when you already know the kind of UI you need. Guides below teach; the cheatsheet routes.
+
 ### 1 — Build and run
 
 | Doc | What you get |
