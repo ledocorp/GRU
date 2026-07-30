@@ -1,0 +1,142 @@
+Gru (GRU) — Third-Party Notices
+==================================
+
+This file aggregates copyright and license notices for third-party components
+included in or required by Gru public binary distributions (build tags
+`grudemo` / `grudemo,webview2`).
+
+Gru-authored source is licensed under the Mozilla Public License 2.0 — see the
+root LICENSE file.
+
+Copyright (c) Shawn Londono and LedoCorp.
+Publisher: LedoCorp. Primary maintainer: Shawn Londono.
+
+Public credits table (GitHub README draft): staging/PUBLIC_README.md
+
+Audit: `GOFLAGS="-tags=grudemo,webview2" go-licenses csv . --ignore github.com/ledocorp/gru`
+Snapshot: staging/go-licenses-grudemo.csv (2026-07-29)
+
+This is not legal advice. Re-run the audit before each public release.
+
+---
+
+Gru platform source
+-------------------
+
+Copyright (c) Shawn Londono and LedoCorp
+
+Licensed under the Mozilla Public License 2.0 (MPL 2.0).
+See LICENSE in this directory or repository root.
+
+Product name: **Gru (GRU)**. Historical monorepo label “GoRy” is deprecated.
+
+---
+
+Raylib (via raylib-go)
+----------------------
+
+Gru uses Raylib through github.com/gen2brain/raylib-go/raylib for rendering and
+windowing. The Go module wraps Raylib C sources (zlib/libpng-style license).
+
+Copyright (c) 2013-2024 Ramon Santamaria (@raysan5)
+License: Zlib (raylib) — see module LICENSE
+
+https://www.raylib.com/
+https://github.com/gen2brain/raylib-go
+
+go-licenses note: the package contains non-Go C code that is not further
+inspected by the license scanner; Raylib’s own LICENSE applies to that code.
+
+---
+
+Remix Icon
+----------
+
+Gru ships an icon font atlas derived from Remix Icon v4.9.1.
+
+Copyright (c) 2017-2026 Remix Design
+
+Licensed under the Remix Icon License v1.0.
+https://github.com/Remix-Design/RemixIcon/blob/master/License
+https://remixicon.com
+
+Note: Some Go APIs still use legacy Phosphor* identifier names. The runtime
+icon set is Remix Icon.
+
+---
+
+Bundled fonts (SIL Open Font License 1.1)
+-------------------------------------------
+
+UI fonts under assets/fonts/ are licensed under the SIL Open Font License 1.1.
+Full license texts are bundled alongside each family:
+
+- Inter — assets/fonts/Inter/OFL.txt
+- Poppins — assets/fonts/poppins/OFL.txt
+- Fira Code — assets/fonts/firacode/OFL.txt
+- DM Mono — assets/fonts/DM_Mono/OFL.txt
+
+Without bundled fonts, Windows builds may fall back to system Segoe UI.
+
+---
+
+Microsoft Edge WebView2 (Windows)
+-----------------------------------
+
+When Gru hosts embedded web content on Windows (`-tags webview2`), the Microsoft
+Edge WebView2 runtime is used on the end-user machine. Microsoft WebView2
+redistribution and runtime terms apply to installers and end users.
+
+https://developer.microsoft.com/microsoft-edge/webview2/
+
+Document the WebView2 runtime requirement in build docs (staging/BUILD.md).
+
+Vendored host: github.com/wailsapp/go-webview2 → ./internal/go-webview2
+(MIT for the Go package; webviewloader reported ISC by go-licenses).
+
+---
+
+Go module dependencies (public demo binary)
+---------------------------------------------
+
+The following modules appear in the `grudemo`+`webview2` license CSV (direct
+and transitive). Licenses are as reported by go-licenses unless noted.
+
+Direct / notable:
+
+| Module | License (summary) |
+|--------|-------------------|
+| github.com/gen2brain/raylib-go/raylib | Zlib |
+| github.com/go-text/typesetting | BSD-3-Clause (+ MIT for harfbuzz subtree) |
+| github.com/yuin/goldmark | MIT |
+| github.com/alecthomas/chroma/v2 | MIT |
+| codeberg.org/go-latex/latex | BSD-3-Clause |
+| github.com/client9/gospell | MIT |
+| github.com/fogleman/gg | MIT |
+| git.sr.ht/~sbinet/gg | MIT |
+| github.com/fsnotify/fsnotify | BSD-3-Clause |
+| github.com/ncruces/zenity | MIT |
+| github.com/wailsapp/go-webview2 (replace → internal) | MIT / ISC (loader) |
+| golang.org/x/image | BSD-3-Clause |
+| golang.org/x/net | BSD-3-Clause |
+| golang.org/x/sys | BSD-3-Clause |
+| golang.org/x/text | BSD-3-Clause |
+| modernc.org/sqlite | BSD-3-Clause |
+| modernc.org/libc | BSD-3-Clause |
+| modernc.org/memory | BSD-3-Clause |
+| modernc.org/mathutil | BSD-3-Clause (module LICENSE; scanner Unknown) |
+| github.com/golang/freetype | BSD-style (module LICENSE; scanner Unknown) |
+| github.com/dlclark/regexp2/v2 | MIT |
+| github.com/agnivade/levenshtein | MIT |
+| github.com/dustin/go-humanize | MIT |
+| github.com/mattn/go-isatty | MIT |
+| github.com/ncruces/go-strftime | MIT |
+| github.com/remyoudompheng/bigfft | BSD-3-Clause |
+
+Full machine-readable list: staging/go-licenses-grudemo.csv
+
+Additional monorepo go.mod requires (e.g. fyne.io/systray, oksvg/rasterx,
+tdewolff/font) may ship in non-grudemo tools; re-audit those binaries separately
+before publishing them.
+
+Maintainer checklist: docs/licensing/THIRD_PARTY.md

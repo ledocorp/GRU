@@ -1,0 +1,574 @@
+{
+  "id": "gallery-root",
+  "children": [
+    {
+      "type": "section",
+      "id": "gallery-section",
+      "title": "",
+      "syntaxHighlight": false,
+      "gap": 16,
+      "padding": 16,
+      "children": [
+        {
+          "type": "text",
+          "id": "gallery-intro",
+          "spans": [
+            { "text": "Component gallery — Theme v2 variants for DocumentSpec blocks. Edit ", "variant": "muted" },
+            { "text": "pages/gallery.gru", "variant": "code", "bold": true },
+            { "text": " and save to hot-reload.", "variant": "muted" }
+          ]
+        },
+        {
+          "type": "card",
+          "id": "gallery-buttons-card",
+          "title": "Buttons",
+          "gap": "md",
+          "padding": "lg",
+          "children": [
+            {
+              "type": "text",
+              "id": "gallery-buttons-hint",
+              "spans": [
+                { "text": "component: button — variants: default, primary, danger, ghost, (transparent + border). Liette is the mom", "variant": "muted" }
+              ]
+            },
+            {
+              "type": "buttonRow",
+              "id": "gallery-buttons-row",
+              "gap": "sm",
+              "children": [
+                {
+                  "type": "button",
+                  "id": "btn-default",
+                  "text": "Default",
+                  "component": "button",
+                  "variant": "default",
+                  "width": 110
+                },
+                {
+                  "type": "button",
+                  "id": "btn-primary",
+                  "text": "Primary",
+                  "component": "button",
+                  "variant": "primary",
+                  "width": 110
+                },
+                {
+                  "type": "button",
+                  "id": "btn-danger",
+                  "text": "Danger",
+                  "component": "button",
+                  "variant": "danger",
+                  "width": 110
+                },
+                {
+                  "type": "button",
+                  "id": "btn-ghost",
+                  "text": "Ghost",
+                  "component": "button",
+                  "variant": "ghost",
+                  "width": 110
+                }
+
+              ]
+            }
+          ]
+        },
+        {
+          "type": "card",
+          "id": "gallery-presets-card",
+          "title": "Visual presets",
+          "gap": "md",
+          "padding": "md",
+          "children": [
+            {
+              "type": "text",
+              "id": "gallery-presets-hint",
+              "spans": [
+                { "text": "Engine-built ", "variant": "muted" },
+                { "text": "presetRow", "variant": "code" },
+                { "text": " — declare preset names + copy; layout is compiled.", "variant": "muted" }
+              ]
+            },
+            {
+              "type": "presetRow",
+              "id": "gallery-presets-strip",
+              "gap": "md",
+              "columns": 3,
+              "minTileWidth": 200,
+              "items": [
+                {
+                  "preset": "neo-glow-card",
+                  "text": "Dark indigo card with outer halo and inner glow rings.",
+                  "props": { "glowIntensity": 0.55 }
+                },
+                {
+                  "preset": "glass-panel",
+                  "text": "Light frosted panel with native top gradient sheen."
+                },
+                {
+                  "preset": "glass-panel-dark",
+                  "text": "Dark frosted panel with light text on indigo glass."
+                },
+                {
+                  "preset": "glass-card",
+                  "text": "More transparent card — gradient visible through the body."
+                },
+                {
+                  "preset": "callout-tip",
+                  "text": "Callout preset — same padding and title band as other tiles."
+                }
+              ]
+            },
+            {
+              "type": "buttonRow",
+              "id": "gallery-preset-buttons",
+              "gap": "sm",
+              "children": [
+                {
+                  "type": "button",
+                  "id": "gallery-preset-primary",
+                  "text": "primary-button",
+                  "preset": "primary-button",
+                  "width": 140
+                },
+                {
+                  "type": "button",
+                  "id": "gallery-preset-ghost",
+                  "text": "ghost-button",
+                  "preset": "ghost-button",
+                  "width": 130
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "card",
+          "id": "gallery-capabilities-card",
+          "title": "Surface capabilities",
+          "gap": "md",
+          "padding": "lg",
+          "height": 168,
+          "capabilities": {
+            "vScroll": true
+          },
+          "children": [
+            {
+              "type": "text",
+              "id": "gallery-capabilities-hint",
+              "spans": [
+                { "text": "Fixed-height card + capabilities.vScroll — wheel inside the body to scroll lines.", "variant": "muted" }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "gallery-capabilities-body",
+              "text": "Line 1 — scrollable body (card height is fixed).\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6\nLine 7\nLine 8\nLine 9\nLine 10\nLine 11\nLine 12"
+            }
+          ]
+        },
+        {
+          "type": "card",
+          "id": "gallery-spacing-card",
+          "title": "Spacing tokens",
+          "gap": "lg",
+          "padding": "md",
+          "children": [
+            {
+              "type": "text",
+              "id": "gallery-spacing-intro",
+              "spans": [
+                { "text": "Compare ", "variant": "muted" },
+                { "text": "padding", "variant": "code", "bold": true },
+                { "text": " (inset from card edge) vs ", "variant": "muted" },
+                { "text": "gap", "variant": "code", "bold": true },
+                { "text": " (between children).", "variant": "muted" }
+              ]
+            },
+            {
+              "type": "card",
+              "id": "gallery-pad-xl",
+              "title": "padding: xl",
+              "padding": "xl",
+              "gap": "sm",
+              "children": [
+                {
+                  "type": "buttonRow",
+                  "id": "gallery-pad-xl-row",
+                  "gap": "sm",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "gallery-pipe-inset",
+                      "text": "|",
+                      "width": 28,
+                      "height": 24
+                    },
+                    {
+                      "type": "badge",
+                      "id": "gallery-pad-xl-badge",
+                      "text": "Inset",
+                      "variant": "primary"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "gallery-pad-xl-note",
+                  "text": "Pipe sits 24px from the card’s left edge."
+                }
+              ]
+            },
+            {
+              "type": "card",
+              "id": "gallery-pad-none",
+              "title": "padding: 0",
+              "style": { "padding": 0 },
+              "gap": "sm",
+              "children": [
+                {
+                  "type": "buttonRow",
+                  "id": "gallery-pad-none-row",
+                  "gap": "sm",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "gallery-pipe-flush",
+                      "text": "|",
+                      "width": 28,
+                      "height": 24
+                    },
+                    {
+                      "type": "badge",
+                      "id": "gallery-pad-none-badge",
+                      "text": "Flush",
+                      "variant": "default"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "gallery-pad-none-note",
+                  "text": "Pipe on the card edge — no inner padding."
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "gallery-gap-label",
+              "spans": [
+                { "text": "Gap between chips (same card, ", "variant": "muted" },
+                { "text": "padding: md", "variant": "code" },
+                { "text": "):", "variant": "muted" }
+              ]
+            },
+            {
+              "type": "buttonRow",
+              "id": "gallery-gap-tight",
+              "gap": "sm",
+              "children": [
+                { "type": "badge", "id": "gap-a", "text": "A", "variant": "success" },
+                { "type": "badge", "id": "gap-b", "text": "B", "variant": "success" },
+                { "type": "badge", "id": "gap-c", "text": "C", "variant": "success" }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "gallery-gap-sm-note",
+              "text": "gap: sm (8px)"
+            },
+            {
+              "type": "buttonRow",
+              "id": "gallery-gap-wide",
+              "gap": "xl",
+              "children": [
+                { "type": "badge", "id": "gap-d", "text": "D", "variant": "warning" },
+                { "type": "badge", "id": "gap-e", "text": "E", "variant": "warning" },
+                { "type": "badge", "id": "gap-f", "text": "F", "variant": "warning" }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "gallery-gap-xl-note",
+              "text": "gap: xl (24px)"
+            }
+          ]
+        },
+        {
+          "type": "card",
+          "id": "gallery-inputs-card",
+          "title": "Inputs & dropdown",
+          "gap": 12,
+          "padding": 18,
+          "children": [
+            {
+              "type": "field",
+              "id": "gallery-name-field",
+              "label": "Text input",
+              "children": [
+                {
+                  "type": "input",
+                  "id": "gallery-name",
+                  "value": "Sample value",
+                  "placeholder": "Placeholder text",
+                  "width": 320
+                }
+              ]
+            },
+            {
+              "type": "field",
+              "id": "gallery-tone-field",
+              "label": "Dropdown",
+              "children": [
+                {
+                  "type": "dropdown",
+                  "id": "gallery-tone",
+                  "options": ["Default", "Primary", "Danger"],
+                  "selectedIndex": 0,
+                  "width": 260
+                }
+              ]
+            },
+            {
+              "type": "input",
+              "id": "gallery-disabled-input",
+              "value": "Disabled",
+              "width": 320,
+              "disabled": true
+            }
+          ]
+        },
+        {
+          "type": "card",
+          "id": "gallery-progress-card",
+          "title": "Progress",
+          "gap": "sm",
+          "padding": "md",
+          "children": [
+            {
+              "type": "field",
+              "id": "gallery-upload-field",
+              "label": "Upload",
+              "children": [
+                {
+                  "type": "progressBar",
+                  "id": "gallery-upload",
+                  "min": 0,
+                  "max": 100,
+                  "value": 65,
+                  "width": 320
+                }
+              ]
+            },
+            {
+              "type": "field",
+              "id": "gallery-sync-field",
+              "label": "Sync",
+              "children": [
+                {
+                  "type": "progressBar",
+                  "id": "gallery-sync",
+                  "min": 0,
+                  "max": 100,
+                  "value": 30,
+                  "width": 320
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "card",
+          "id": "gallery-toggles-card",
+          "title": "Checkbox, toggle, radio, slider",
+          "gap": 12,
+          "padding": 18,
+          "children": [
+            {
+              "type": "checkbox",
+              "id": "gallery-check",
+              "label": "Checkbox (checked)",
+              "checked": true
+            },
+            {
+              "type": "toggle",
+              "id": "gallery-toggle",
+              "label": "Toggle"
+            },
+            {
+              "type": "field",
+              "id": "gallery-radio-field",
+              "label": "Radio group",
+              "children": [
+                {
+                  "type": "radioGroup",
+                  "id": "gallery-radio",
+                  "options": ["Compact", "Comfortable", "Spacious"],
+                  "selectedIndex": 1,
+                  "width": 280
+                }
+              ]
+            },
+            {
+              "type": "field",
+              "id": "gallery-slider-field",
+              "label": "Slider",
+              "children": [
+                {
+                  "type": "slider",
+                  "id": "gallery-slider",
+                  "min": 0,
+                  "max": 100,
+                  "value": 65,
+                  "valueFormat": "%.0f"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "card",
+          "id": "gallery-cards-card",
+          "title": "Card variants",
+          "gap": 12,
+          "padding": 18,
+          "children": [
+            {
+              "type": "card",
+              "id": "gallery-inner-default",
+              "title": "Default card",
+              "padding": 14,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "gallery-inner-default-text",
+                  "text": "Standard card chrome inside a parent card."
+                }
+              ]
+            },
+            {
+              "type": "card",
+              "id": "gallery-compare-default",
+              "title": "Default (compare)",
+              "padding": 14,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "gallery-compare-default-text",
+                  "text": "Plain default card — white fill, grey border."
+                }
+              ]
+            },
+            {
+              "type": "card",
+              "id": "gallery-style-override",
+              "title": "Custom color (one-off)",
+              "gap": 6,
+              "padding": 14,
+              "style": {
+                "backgroundColor": "#F59E0B",
+                "textColor": "#E5E7EB",
+                "borderColor": "#92400E",
+                "borderWidth": 2,
+                "cornerRadius": 8
+              },
+              "children": [
+                {
+                  "type": "text",
+                  "id": "gallery-style-text",
+                  "spans": [
+                    { "text": "Not a theme variant — uses a ", "style": "richtext-on-dark" },
+                    { "text": "style", "style": "richtext-on-dark-code" },
+                    { "text": " block (#F59E0B fill, light label text). Prefer ", "style": "richtext-on-dark" },
+                    { "text": "callout", "style": "richtext-on-dark-code" },
+                    { "text": " / ", "style": "richtext-on-dark" },
+                    { "text": "code", "style": "richtext-on-dark-code" },
+                    { "text": " variants below for shared looks.", "style": "richtext-on-dark" }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "callout",
+              "id": "gallery-callout",
+              "title": "Callout",
+              "text": "Indigo-tinted fill and border (Theme v2 card/callout variant)."
+            },
+            {
+              "type": "code",
+              "id": "gallery-code",
+              "title": "Code block",
+              "text": "{ \"type\": \"button\", \"variant\": \"primary\" }"
+            }
+          ]
+        },
+        {
+          "type": "card",
+          "id": "gallery-text-card",
+          "title": "Text spans",
+          "gap": 8,
+          "padding": 18,
+          "children": [
+            {
+              "type": "text",
+              "id": "gallery-text-body",
+              "text": "Plain body text on one line."
+            },
+            {
+              "type": "text",
+              "id": "gallery-text-mixed",
+              "spans": [
+                { "text": "Muted ", "variant": "muted" },
+                { "text": "bold ", "bold": true },
+                { "text": "code", "variant": "code" },
+                { "text": " and " },
+                { "text": "link", "link": "demo://settings" }
+              ]
+            },
+            {
+              "type": "list",
+              "id": "gallery-list",
+              "items": ["First item", "Second item", "Third item"]
+            },
+            {
+              "type": "divider",
+              "id": "gallery-divider"
+            }
+          ]
+        },
+        {
+          "type": "card",
+          "id": "gallery-nav-card",
+          "title": "Demo links",
+          "gap": 8,
+          "padding": 18,
+          "children": [
+            {
+              "type": "text",
+              "id": "gallery-nav-text",
+              "spans": [
+                { "text": "Jump to " },
+                { "text": "Settings", "link": "demo://settings" },
+                { "text": ", " },
+                { "text": "Dashboard", "link": "demo://dashboard" },
+                { "text": ", or " },
+                { "text": "Docs", "link": "demo://docs" },
+                { "text": ", or " },
+                { "text": "Sign in", "link": "demo://signin" },
+                { "text": "." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "id": "gallery-status",
+          "spans": [
+            { "text": "Gallery — pages/gallery.gru", "variant": "muted" }
+          ]
+        }
+      ]
+    }
+  ]
+}

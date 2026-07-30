@@ -1,0 +1,19 @@
+# Binaries / local build
+*.exe
+*.test
+*.out
+dist/
+*.syso.bak
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Go
+vendor/
+
+# Agent / local only
+.cursor/
