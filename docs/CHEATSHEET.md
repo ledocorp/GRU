@@ -1,6 +1,6 @@
-# Gru cheatsheet (v0.7.0)
+# Gru cheatsheet (v0.7.1)
 
-Fingertip lookup for the public toolkit **as shipped in v0.7.0**. Guides teach; this page answers *what exists* and *where to jump*.
+Fingertip lookup for the public toolkit **as shipped in v0.7.1**. Guides teach; this page answers *what exists* and *where to jump*.
 
 **Module:** `github.com/ledocorp/gru` · **Package:** `ui`  
 **Site:** [ledocorp.org/gru/docs/cheatsheet](https://www.ledocorp.org/gru/docs/cheatsheet/)  
@@ -24,7 +24,7 @@ Scan Status ≠ `ok` before a release. That list *is* the gap backlog.
 ## 1. Commands
 
 ```bash
-go get github.com/ledocorp/gru@v0.7.0
+go get github.com/ledocorp/gru@v0.7.1
 go run ./cmd/hello
 go run -tags webview2 ./cmd/webviewhello
 go run -tags grudemo .
@@ -219,7 +219,7 @@ Contracts: [architecture/overview.md](architecture/overview.md).
 6. Do not assume WebView click-through / passthrough; occlude the HWND when overlays need hits.
 7. Do not forget `assets/fonts/` must resolve at runtime.
 8. Do not mix shell recipes casually; pick one shell ID per scene.
-9. Do not treat `@latest` as pinned; prefer `@v0.7.0` until you mean to float.
+9. Do not treat `@latest` as pinned; prefer `@v0.7.1` until you mean to float.
 10. Do not document private apps as public capabilities.
 
 ---
@@ -247,9 +247,9 @@ Before each public cut:
 4. Private products stay `private`, never `ok`.
 5. Prefer fixing `demo-thin` / `doc-thin` over adding aspirational `missing` rows.
 
-### Triage (post 0.7.0 local)
+### Triage (closed in v0.7.1)
 
-Closed in this staging pass:
+Closed in this release:
 
 | Item | Was | Now |
 |------|-----|-----|
@@ -268,4 +268,4 @@ Still accepted later (not blockers):
 
 ---
 
-*Gru (GRU) · v0.7.0 · MPL 2.0 · LedoCorp*
+*Gru (GRU) · v0.7.1 · MPL 2.0 · LedoCorp*

@@ -1,6 +1,6 @@
 # Gru
 
-**Version:** [0.7.0](https://github.com/ledocorp/GRU/releases/tag/v0.7.0)
+**Version:** [0.7.1](https://github.com/ledocorp/GRU/releases/tag/v0.7.1)
 
 **Gru (GRU)** is a Go-first UI toolkit (retained-mode, Raylib-backed) for building desktop applications.
 
@@ -33,7 +33,7 @@ Commercial dual-licensing may come later; it is **not** part of this release.
 ## Module
 
 ```bash
-go get github.com/ledocorp/gru@v0.7.0
+go get github.com/ledocorp/gru@v0.7.1
 ```
 
 ```go
