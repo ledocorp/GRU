@@ -166,6 +166,23 @@ type TitleBar struct {
 	hasSavedBounds bool
 }
 
+// ChromeNeedsPostBlit reports whether caption-button hover/press must be painted
+// after a cached SSAA blit. Hover state is computed in Update every frame, but
+// Draw is skipped on cache hits — without a post-blit pass the close button
+// never shows its red hover plate.
+func (tb *TitleBar) ChromeNeedsPostBlit() bool {
+	if tb == nil {
+		return false
+	}
+	if tb.hoverClose || tb.hoverMax || tb.hoverMin || tb.closeArmed {
+		return true
+	}
+	// Keep painting while the cursor is in the title band so leaving a button
+	// clears the hover plate without waiting for a full document redraw.
+	mouse := rl.GetMousePosition()
+	return mouse.Y >= 0 && mouse.Y < TitleBarHeight
+}
+
 // IsResizing reports an active borderless edge/corner resize drag.
 func (tb *TitleBar) IsResizing() bool { return tb.resizing }
 

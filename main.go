@@ -932,12 +932,20 @@ func runApp() {
 		// makes rapid clicks feel laggy.
 		if midWake := ui.DrainWakeSignals(); midWake.Any() {
 			frameWake = frameWake.Merge(midWake)
-			if windowFocused && (midWake.Reasons&ui.WakeInput != 0 ||
-				midWake.Reasons&ui.WakeAnimation != 0) {
+			if windowFocused && (midWake.Reasons&ui.WakeInput != 0) {
+				// Real interaction — ActiveFPS + interactive grace.
 				idlePolicy.NoteInteractiveWake(time.Now())
 				if lastTargetFPS != ui.ActiveFPS {
 					rl.SetTargetFPS(int32(ui.ActiveFPS))
 					lastTargetFPS = ui.ActiveFPS
+				}
+			} else if windowFocused && (midWake.Reasons&ui.WakeAnimation != 0) &&
+				(midWake.Reasons&^ui.WakeAnimation) == 0 {
+				// Animation-only: raise to AnimationFPS without resetting interactive grace
+				// (that grace pin would keep ActiveFPS / 60 forever).
+				if lastTargetFPS < ui.AnimationFPS {
+					rl.SetTargetFPS(int32(ui.AnimationFPS))
+					lastTargetFPS = ui.AnimationFPS
 				}
 			}
 		}
@@ -1088,6 +1096,10 @@ func runApp() {
 				}
 				ui.ClearDrawDirtySubtree(doc.Root)
 			}
+			// Cache-hit frames skip titleBar.Draw inside the RT — repaint hover chrome here.
+			if borderless && !fullRedraw && titleBar.ChromeNeedsPostBlit() {
+				titleBar.Draw()
+			}
 			ui.DrawAnimationOverlays(doc.Root, navRect)
 			drawPostChromeOverlays(windowW, windowH, doc.Root, bottomChrome, &studioPanel, studioState, inspector, navBg, navHint, navTextColor)
 			if engineDebugHUDVisible() && rl.IsWindowReady() {
@@ -1175,6 +1187,9 @@ func runApp() {
 					drawLauncherChrome(windowW, windowH, navBg, &studioPanel, studioState)
 				}
 				ui.RecordCacheHit()
+			}
+			if borderless && !fullRedraw && titleBar.ChromeNeedsPostBlit() {
+				titleBar.Draw()
 			}
 
 			ui.DrawAnimationOverlays(doc.Root, navRect)

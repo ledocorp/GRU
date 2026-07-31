@@ -35,16 +35,25 @@ type ComboBox struct {
 	popupListCap   float32
 }
 
-// NewComboBox creates a ComboBox. selected must not be nil; if its value is not
-// in options, the first option is used when the list is non-empty.
+// NewComboBox creates a ComboBox. selected must not be nil.
+// Empty selection is allowed so Placeholder can show; a non-empty value that is
+// not in options snaps to the first option when the list is non-empty.
 func NewComboBox(id string, options []string, selected *Signal[string], x, y, w, h float32) *ComboBox {
 	if selected == nil {
 		panic("ui.NewComboBox: selected must not be nil")
 	}
 	cur := selected.Get()
-	if cur == "" && len(options) > 0 {
-		cur = options[0]
-		selected.Set(cur)
+	if cur != "" && len(options) > 0 {
+		found := false
+		for _, o := range options {
+			if o == cur {
+				found = true
+				break
+			}
+		}
+		if !found {
+			selected.Set(options[0])
+		}
 	}
 	c := &ComboBox{
 		Element:     NewElement(id, x, y, w, h),
@@ -89,11 +98,16 @@ func (c *ComboBox) filteredOptions() []string {
 }
 
 func (c *ComboBox) filterRect() rl.Rectangle {
-	b := c.Bounds()
-	if c.popupOpenAbove {
-		return rl.NewRectangle(b.X, b.Y-comboFilterH, b.Width, comboFilterH)
+	// Match popup width (may be host-capped below the closed face width).
+	pop := c.PopupBounds()
+	if !c.isOpen || pop.Width <= 0 {
+		return rl.Rectangle{}
 	}
-	return rl.NewRectangle(b.X, b.Y+b.Height, b.Width, comboFilterH)
+	y := pop.Y
+	if c.popupOpenAbove {
+		y = pop.Y + c.listViewportH()
+	}
+	return rl.NewRectangle(pop.X, y, pop.Width, comboFilterH)
 }
 
 func (c *ComboBox) listTopY() float32 {
@@ -184,6 +198,7 @@ func (c *ComboBox) popupRect() rl.Rectangle {
 }
 
 func (c *ComboBox) absorbFilterKeys() {
+	changed := false
 	for {
 		ch := rl.GetCharPressed()
 		if ch == 0 {
@@ -191,11 +206,15 @@ func (c *ComboBox) absorbFilterKeys() {
 		}
 		if ch >= 32 && ch != 127 {
 			c.filter += string(rune(ch))
-			c.MarkDrawDirty()
+			changed = true
 		}
 	}
 	if rl.IsKeyPressed(rl.KeyBackspace) && len(c.filter) > 0 {
 		c.filter = c.filter[:len(c.filter)-1]
+		changed = true
+	}
+	if changed {
+		NoteTypingGesture()
 		c.MarkDrawDirty()
 	}
 }
@@ -231,6 +250,9 @@ func (c *ComboBox) Update(_ float32) {
 	c.hovered = rl.CheckCollisionPointRec(mouse, bounds)
 
 	if c.isOpen {
+		if c.filterFocus {
+			NoteTypingGesture()
+		}
 		c.absorbFilterKeys()
 		prevCap := c.popupListCap
 		c.syncMenuPopupPlacement()

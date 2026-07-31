@@ -140,8 +140,18 @@ func (s *formScene) buildPreferencesPanel(volumeSlider *ui.Slider, notifyCb *ui.
 	for _, sz := range []float32{18, 20, 24} {
 		cb := ui.NewCheckbox(fmt.Sprintf("form-cb-sz-%.0f", sz), true, 0, 0, sz, sz)
 		sizeRow.AddChild(cb)
-		sizeRow.AddChild(ui.NewPlainText(fmt.Sprintf("form-cb-sz-lbl-%.0f", sz), "form-label",
-			fmt.Sprintf("%.0fpx", sz), 0, 0, 0, 0))
+		// Shrink-wrapped Label — PlainText in a FlexRow measures at full row width
+		// and crushes later siblings (the 24px sample was the usual casualty).
+		txt := fmt.Sprintf("%.0fpx", sz)
+		lbl := ui.NewLabel(fmt.Sprintf("form-cb-sz-lbl-%.0f", sz), txt, 0, 0, 0, 24)
+		lbl.SetStyle("form-label")
+		lbl.Wrap = false
+		tw := float32(ui.MeasureTextS(txt, lbl.GetStyle())) + 4
+		b := lbl.Bounds()
+		b.Width = tw
+		b.Height = 24
+		lbl.SetBounds(b)
+		sizeRow.AddChild(lbl)
 	}
 
 	p.AddChild(volumeLbl)

@@ -127,10 +127,10 @@ func (s *appShellScene) buildDrawerContent() *ui.Container {
 	root.Gap = 4
 	root.SetStyle("transparent")
 
-	hdr := ui.NewLabel("appshell-drawer-title", "Menu", 0, 0, 0, 28)
+	hdr := ui.NewLabel("appshell-drawer-title", "Menu", 0, 0, 0, 0)
 	hdr.SetStyle("form-label")
 	root.AddChild(hdr)
-	sub := ui.NewLabel("appshell-drawer-sub", "Switch tabs or open settings", 0, 0, 0, 20)
+	sub := ui.NewLabel("appshell-drawer-sub", "Switch tabs or open settings", 0, 0, 0, 0)
 	sub.SetStyle("form-value")
 	root.AddChild(sub)
 
@@ -154,7 +154,7 @@ func (s *appShellScene) buildDrawerContent() *ui.Container {
 	root.AddChild(sep)
 
 	settings := ui.NewListTile("appshell-drawer-settings", "Settings", "App preferences", 0, 0, 0, 0)
-	settings.SetTrailing(ui.NewLabel("appshell-drawer-chev", "›", 0, 0, 20, 24))
+	settings.SetTrailing(ui.NewIcon("appshell-drawer-chev", ui.PhosphorCaretRight, ui.PhosphorRegular, 0, 0, 18, 18))
 	settings.OnClick = func() { s.drawerAction("Settings", -1) }
 	root.AddChild(settings)
 	return root
@@ -199,7 +199,7 @@ func (s *appShellScene) buildPageContent(vp *ui.Viewport) {
 	av.ShowStatus = true
 	av.StatusOnline = true
 	profile.SetLeading(av)
-	profile.SetTrailing(ui.NewLabel("appshell-chev", "›", 0, 0, 20, 24))
+	profile.SetTrailing(ui.NewIcon("appshell-chev", ui.PhosphorCaretRight, ui.PhosphorRegular, 0, 0, 18, 18))
 	profile.OnClick = func() {
 		ui.ShowToast("Profile row", ui.ToastInfo, 2*time.Second)
 	}
@@ -228,6 +228,9 @@ func (s *appShellScene) buildPageContent(vp *ui.Viewport) {
 func (s *appShellScene) OnUpdate(doc *ui.Document, _ float32) {
 	if s.bottom != nil {
 		UpdateShellFooterAutoHide(s.bottom, doc)
+	}
+	if ui.OverlayBlocksSceneInput() {
+		return
 	}
 
 	if !rl.IsMouseButtonPressed(rl.MouseLeftButton) {

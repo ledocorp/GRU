@@ -33,7 +33,8 @@ func SampleEditorKeyboardWake(root Node) WakeSummary {
 	}
 	if findFocusedTextEditor(root) == nil &&
 		findFocusedTextInput(root) == nil &&
-		findFocusedSearchBar(root) == nil {
+		findFocusedSearchBar(root) == nil &&
+		!anyOpenComboBoxFilter(root) {
 		return WakeSummary{}
 	}
 	if !editorTypingKeysActive() {
@@ -73,6 +74,21 @@ func findFocusedSearchBar(n Node) *SearchBar {
 		}
 	}
 	return nil
+}
+
+func anyOpenComboBoxFilter(n Node) bool {
+	if n == nil || n.IsHidden() {
+		return false
+	}
+	if cb, ok := n.(*ComboBox); ok && cb.IsOpen() {
+		return true
+	}
+	for _, ch := range n.Children() {
+		if anyOpenComboBoxFilter(ch) {
+			return true
+		}
+	}
+	return false
 }
 
 func editorTypingKeysActive() bool {

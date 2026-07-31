@@ -38,6 +38,18 @@ func PrepareOverlayHitTest(root Node) {
 	if IsModalVisible() {
 		overlayHitRects = append(overlayHitRects, ModalMgr.panelHitRect())
 	}
+	// Drawer/sheet scrims live outside the document tree — block hover/clicks on
+	// scene widgets underneath for the whole content band.
+	if IsDrawerVisible() {
+		sw := float32(rl.GetScreenWidth())
+		sh := float32(rl.GetScreenHeight())
+		overlayHitRects = append(overlayHitRects, DrawerMgr.ContentBandHitRect(sw, sh))
+	}
+	if IsBottomSheetVisible() {
+		sw := float32(rl.GetScreenWidth())
+		sh := float32(rl.GetScreenHeight())
+		overlayHitRects = append(overlayHitRects, BottomSheetMgr.ContentBandHitRect(sw, sh))
+	}
 	for _, tb := range collectOpenToolbars(root.Children()) {
 		if !tb.overflowOpen {
 			continue

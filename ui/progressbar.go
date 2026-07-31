@@ -10,10 +10,10 @@ import (
 
 // ProgressBar is a non-interactive widget that displays a horizontal fill bar.
 //
-// Value is a Signal[float32] in [0.0, 1.0]. When Value changes, the bar
-// updates reactively on the next frame. The fill color is taken from a
-// "progress-fill" key in CurrentTheme (falls back to an indigo default),
-// and the track color comes from the widget's own style (default "progress").
+// Value is a Signal[float32] in [0.0, 1.0]. Continuous demos should call
+// [ProgressBar.SetLiveAnimation](true) while Value advances: the SSAA cache
+// keeps a static track (like Spinner), and fill + percent repaint together in
+// [DrawAnimationOverlay] at 1× so AnimationFPS (36) does not drop the fill.
 //
 // # LLM Prompt Template
 //
@@ -25,49 +25,90 @@ import (
 // Demo scenes: **Batch 25 ProgressBar**.
 type ProgressBar struct {
 	Element
-	// Value is the fill level in [0.0, 1.0]. Values outside this range are clamped.
 	Value *Signal[float32]
+	live  bool
 }
 
-// UsesScissor implements Node.UsesScissor.
-// ProgressBar clips the fill region via BeginScissorMode.
-func (pb *ProgressBar) UsesScissor() bool { return true }
+// UsesScissor — false, matching Spinner. Nested BeginScissorMode inside
+// DrawAnimationOverlay clears the overlay clip and the indigo fill vanishes
+// when idle drops to AnimationFPS (cache-hit frames).
+func (pb *ProgressBar) UsesScissor() bool { return false }
 
 // NewProgressBar creates a ProgressBar with the given initial value.
 func NewProgressBar(id string, initialValue float32, x, y, w, h float32) *ProgressBar {
-	if initialValue < 0 {
-		initialValue = 0
-	}
-	if initialValue > 1 {
-		initialValue = 1
-	}
+	initialValue = progressClamp01(initialValue)
 	pb := &ProgressBar{
 		Element: NewElement(id, x, y, w, h),
 		Value:   NewSignal(initialValue),
 	}
 	pb.styleName = "progress"
-	pb.Value.Subscribe(func() { pb.MarkDirty() })
+	pb.Value.Subscribe(func() {
+		if pb.live {
+			return
+		}
+		pb.MarkDrawDirty()
+	})
 	return pb
 }
 
-// Layout implements Node.Layout (no-op for leaf widgets).
-func (pb *ProgressBar) Layout() { pb.layoutDirty = false }
-
-// Draw implements Node.Draw.
-func (pb *ProgressBar) Draw() {
-	pb.drawInternal()
+// SetLiveAnimation keeps fill updates off the document dirty path (AnimationFPS).
+// Call false when the run ends to bake the final fill into the SSAA cache.
+func (pb *ProgressBar) SetLiveAnimation(on bool) {
+	if pb.live == on {
+		return
+	}
+	pb.live = on
+	pb.MarkDrawDirty()
 }
 
-// drawInternal renders the track and the filled portion.
-func (pb *ProgressBar) drawInternal() {
+// AnimationActive implements AnimationReporter.
+func (pb *ProgressBar) AnimationActive() bool {
+	return pb.live && !pb.IsHidden()
+}
+
+// AnimationSource implements AnimationReporter.
+func (pb *ProgressBar) AnimationSource() string { return pb.ID() }
+
+// Layout implements Node.Layout.
+func (pb *ProgressBar) Layout() { pb.layoutDirty = false }
+
+// Draw implements Node.Draw — Spinner-style: track only while live.
+func (pb *ProgressBar) Draw() {
+	if pb.AnimationActive() {
+		pb.paint(0, false)
+		return
+	}
+	pb.paint(progressClamp01(pb.Value.Get()), true)
+}
+
+// DrawAnimationOverlay redraws track + fill + label together at 1× (Spinner).
+func (pb *ProgressBar) DrawAnimationOverlay() {
+	if !pb.AnimationActive() {
+		return
+	}
+	pb.paint(progressClamp01(pb.Value.Get()), true)
+}
+
+func progressClamp01(v float32) float32 {
+	if v < 0 {
+		return 0
+	}
+	if v > 1 {
+		return 1
+	}
+	return v
+}
+
+func (pb *ProgressBar) paint(v float32, showFill bool) {
 	if pb.IsHidden() {
 		return
 	}
-
 	style := pb.GetStyle()
 	bounds := pb.Bounds()
+	if bounds.Width < 1 || bounds.Height < 1 {
+		return
+	}
 
-	// Pre-compute roundness for pill / rounded shape
 	shorter := bounds.Width
 	if bounds.Height < shorter {
 		shorter = bounds.Height
@@ -80,7 +121,6 @@ func (pb *ProgressBar) drawInternal() {
 		}
 	}
 
-	// Track background
 	if roundness > 0 {
 		rl.DrawRectangleRounded(bounds, roundness, 8, style.BackgroundColor)
 	} else {
@@ -93,8 +133,10 @@ func (pb *ProgressBar) drawInternal() {
 			rl.DrawRectangleLinesEx(bounds, style.BorderWidth, style.BorderColor)
 		}
 	}
+	if !showFill {
+		return
+	}
 
-	// Fill colour and roundness — use "progress-fill" theme entry if present
 	fillColor := rl.NewColor(79, 70, 229, 255)
 	fillRoundness := roundness
 	if fs, ok := CurrentTheme["progress-fill"]; ok {
@@ -108,56 +150,20 @@ func (pb *ProgressBar) drawInternal() {
 		}
 	}
 
-	// Clamp value and compute fill width
-	v := pb.Value.Get()
-	if v < 0 {
-		v = 0
-	}
-	if v > 1 {
-		v = 1
-	}
-
-	// Determine ancestor Viewport clip so every draw call in this widget is
-	// constrained to the scroll container's visible area.
-	var vpClip rl.Rectangle
-	hasVP := false
-	if vp := findViewport(pb); vp != nil {
-		vpClip = vp.ClipBounds()
-		hasVP = true
-	}
-
-	// Re-apply the Viewport scissor (or disable clipping) after a sub-scissor.
-	restoreVP := func() {
-		if hasVP {
-			beginScissorMode(int32(vpClip.X), int32(vpClip.Y), int32(vpClip.Width), int32(vpClip.Height))
-		}
-	}
-
+	// No nested scissor — overlay path already clips via DrawAnimationOverlays.
 	fillW := bounds.Width * v
-	if fillW > 0 {
-		// Scissor to fill width intersected with the Viewport clip so the fill
-		// never bleeds outside the scroll container on partial scroll-off.
-		fillRect := rl.NewRectangle(bounds.X, bounds.Y, fillW, bounds.Height)
-		if hasVP {
-			fillRect = intersectRects(fillRect, vpClip)
-		}
-		if fillRect.Width > 0 && fillRect.Height > 0 {
-			beginScissorMode(int32(fillRect.X), int32(fillRect.Y), int32(fillRect.Width), int32(fillRect.Height))
-			if fillRoundness > 0 {
-				rl.DrawRectangleRounded(bounds, fillRoundness, 8, fillColor)
-			} else {
-				rl.DrawRectangleRec(rl.NewRectangle(bounds.X, bounds.Y, fillW, bounds.Height), fillColor)
-			}
-			rl.EndScissorMode()
-			restoreVP()
+	if fillW >= 0.5 {
+		fill := rl.NewRectangle(bounds.X, bounds.Y, fillW, bounds.Height)
+		if fillRoundness > 0 {
+			rl.DrawRectangleRounded(fill, fillRoundness, 8, fillColor)
+		} else {
+			rl.DrawRectangleRec(fill, fillColor)
 		}
 	}
 
-	// Percentage label — only when bar is tall enough to be legible (h >= 18)
 	if bounds.Height >= 18 {
 		const pctFontSize = int32(13)
-		pct := int32(v * 100)
-		label := fmt.Sprintf("%d%%", pct)
+		label := fmt.Sprintf("%d%%", int32(v*100+0.5))
 		textW := measureText(label, pctFontSize)
 		textX := int32(bounds.X) + (int32(bounds.Width)-textW)/2
 		textY := int32(bounds.Y) + (int32(bounds.Height)-pctFontSize)/2

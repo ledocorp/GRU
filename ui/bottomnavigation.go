@@ -103,6 +103,10 @@ func (bn *BottomNavigationBar) Update(_ float32) {
 	if bn.IsHidden() {
 		return
 	}
+	if ScenePointerBlocked() {
+		bn.hoverIdx = -1
+		return
+	}
 	mouse := rl.GetMousePosition()
 	bn.hoverIdx = -1
 	for i := range bn.Items {
@@ -111,7 +115,7 @@ func (bn *BottomNavigationBar) Update(_ float32) {
 			break
 		}
 	}
-	if !rl.IsMouseButtonPressed(rl.MouseLeftButton) || bn.hoverIdx < 0 {
+	if bn.hoverIdx < 0 || !PointerClickConsume(bn.itemBounds(bn.hoverIdx)) {
 		return
 	}
 	prev := bn.Selected.Get()

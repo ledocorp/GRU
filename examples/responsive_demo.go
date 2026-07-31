@@ -27,8 +27,7 @@ type responsiveScene struct {
 	windowBpText  *ui.Signal[string]
 	simBpLabel    *ui.RichText
 	simBpText     *ui.Signal[string]
-	widthLabel    *ui.RichText
-	widthText     *ui.Signal[string]
+	widthText *ui.Signal[string]
 	simWidth      float32
 	previewFrames      []*ui.Card
 	previewScrollLanes []*ui.Container // fixed simWidth; scroll when window narrower
@@ -287,7 +286,7 @@ func (s *responsiveScene) buildControlsPanel(doc *ui.Document) *ui.Panel {
 	winCol := ui.NewContainer("resp-win-col", 0, 0, 0, 0)
 	winCol.AutoHeight = true
 	winCol.FlexDirection = ui.FlexColumn
-	winCol.Gap = 4
+	winCol.Gap = 6
 	winCol.SetFlexGrow(1)
 	winCol.SetStyle("transparent")
 	winCol.AddChild(FlexCopy("resp-win-key", "form-label", "Window tier (page grid)"))
@@ -297,7 +296,7 @@ func (s *responsiveScene) buildControlsPanel(doc *ui.Document) *ui.Panel {
 	simCol := ui.NewContainer("resp-sim-col", 0, 0, 0, 0)
 	simCol.AutoHeight = true
 	simCol.FlexDirection = ui.FlexColumn
-	simCol.Gap = 4
+	simCol.Gap = 6
 	simCol.SetFlexGrow(1)
 	simCol.SetStyle("transparent")
 	simCol.AddChild(FlexCopy("resp-sim-key", "form-label", "Preview tier (inner layouts)"))
@@ -307,6 +306,9 @@ func (s *responsiveScene) buildControlsPanel(doc *ui.Document) *ui.Panel {
 	readout.AddChild(winCol)
 	readout.AddChild(simCol)
 	p.AddChild(readout)
+	tierPad := ui.NewContainer("resp-tier-pad", 0, 0, 0, 10)
+	tierPad.SetStyle("transparent")
+	p.AddChild(tierPad)
 
 	sliderRow := ui.NewContainer("resp-slider-row", 0, 0, 0, 0)
 	sliderRow.AutoHeight = true
@@ -317,9 +319,17 @@ func (s *responsiveScene) buildControlsPanel(doc *ui.Document) *ui.Panel {
 	slider.SetFlexGrow(1)
 	slider.ShowValue = false
 	s.widthSlider = slider
-	s.widthLabel, s.widthText = FlexCopyPair("resp-width-label", "form-label", fmt.Sprintf("%.0f px", s.simWidth))
+	// Fixed-width readout — FlexCopy/PlainText in a FlexRow steals the full
+	// row width during AutoHeight measure and leaves the slider with ~0 width.
+	s.widthText = ui.NewSignal(fmt.Sprintf("%.0f px", s.simWidth))
+	widthLbl := ui.NewLabel("resp-width-label", s.widthText.Get(), 0, 0, 72, 32)
+	widthLbl.SetStyle("form-label")
+	widthLbl.Wrap = false
+	s.widthText.Subscribe(func() {
+		widthLbl.Text.Set(s.widthText.Get())
+	})
 	sliderRow.AddChild(slider)
-	sliderRow.AddChild(s.widthLabel)
+	sliderRow.AddChild(widthLbl)
 	p.AddChild(sliderRow)
 
 	ui.ActiveBreakpoint.Subscribe(func() {
@@ -390,8 +400,9 @@ func (s *responsiveScene) buildFlexGrowPanel() *ui.Panel {
 	host.Gap = 10
 
 	for i, title := range []string{"Alpha", "Beta", "Gamma"} {
-		card := ui.NewCard(fmt.Sprintf("resp-flexgrow-card-%d", i), "", 0, 0, 0, 88)
-		card.AutoHeight = false
+		// AutoHeight — fixed 88px clipped form-value + card padding (16×2).
+		card := ui.NewCard(fmt.Sprintf("resp-flexgrow-card-%d", i), "", 0, 0, 0, 0)
+		card.AutoHeight = true
 		card.SetFlexGrow(1)
 		card.FlexDirection = ui.FlexColumn
 		card.Gap = 6
@@ -421,8 +432,8 @@ func (s *responsiveScene) buildResponsiveFlexPanel() *ui.Panel {
 	resp.SetStyle("transparent")
 
 	for i, title := range []string{"North", "South", "East"} {
-		card := ui.NewCard(fmt.Sprintf("resp-responsive-card-%d", i), "", 0, 0, 0, 72)
-		card.AutoHeight = false
+		card := ui.NewCard(fmt.Sprintf("resp-responsive-card-%d", i), "", 0, 0, 0, 0)
+		card.AutoHeight = true
 		card.SetFlexGrow(1)
 		card.FlexDirection = ui.FlexColumn
 		card.Gap = 4

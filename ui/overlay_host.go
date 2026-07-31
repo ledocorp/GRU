@@ -295,12 +295,14 @@ func (h *OverlayHost) HandleBackdrop(panelRect, bandRect rl.Rectangle, onDismiss
 	if h.Kind == OverlayAnimSlideLeft {
 		inBand := rl.CheckCollisionPointRec(mouse, bandRect)
 		if inBand && !inPanel {
+			PointerClickMarkUsed()
 			onDismiss()
 			return true
 		}
 		return false
 	}
 	if !inPanel {
+		PointerClickMarkUsed()
 		onDismiss()
 		return true
 	}

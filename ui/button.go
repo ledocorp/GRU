@@ -60,6 +60,14 @@ func (b *Button) Update(dt float32) {
 		return
 	}
 
+	if ScenePointerBlocked() {
+		if b.hovered || b.pressed {
+			b.hovered = false
+			b.pressed = false
+			b.MarkDrawDirty()
+		}
+		return
+	}
 	mouse := rl.GetMousePosition()
 	prevHovered := b.hovered
 	prevPressed := b.pressed
@@ -70,7 +78,7 @@ func (b *Button) Update(dt float32) {
 		b.MarkDrawDirty()
 	}
 
-	if b.hovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) && b.OnClick != nil {
+	if b.hovered && PointerClickConsume(b.Bounds()) && b.OnClick != nil {
 		b.OnClick()
 	}
 }

@@ -329,13 +329,17 @@ func collectAnimationWake(n Node, out *WakeSummary) {
 	}
 }
 
-// AnyDropdownOpen reports whether a dropdown option list is expanded anywhere
-// under root. The main loop uses this to stay at ActiveFPS while a menu is open.
+// AnyDropdownOpen reports whether a dropdown or combobox list is expanded
+// anywhere under root. The main loop uses this to stay at ActiveFPS while a
+// menu is open.
 func AnyDropdownOpen(root Node) bool {
 	if root == nil {
 		return false
 	}
-	return len(collectOpenDropdowns([]Node{root})) > 0
+	if len(collectOpenDropdowns([]Node{root})) > 0 {
+		return true
+	}
+	return len(collectOpenComboBoxes([]Node{root})) > 0
 }
 
 // String returns a compact, stable reason list for logs and overlays.

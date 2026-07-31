@@ -124,6 +124,11 @@ func (b *bottomSheetManager) sheetRect(sw, sh float32) rl.Rectangle {
 	return b.host.SlideSheetRect(sw, sh, sheetH)
 }
 
+// ContentBandHitRect is the area that should block scene pointer hit-tests.
+func (b *bottomSheetManager) ContentBandHitRect(sw, sh float32) rl.Rectangle {
+	return b.host.ContentBand(sw, sh)
+}
+
 func (b *bottomSheetManager) handleRect(sheet rl.Rectangle) rl.Rectangle {
 	return rl.NewRectangle(
 		sheet.X+(sheet.Width-bottomSheetHandleW)/2,

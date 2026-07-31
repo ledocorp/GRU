@@ -78,9 +78,9 @@ func (s *batch15ComboBoxScene) Build(doc *ui.Document) {
 	cbEmpty := ui.NewComboBox("b15-empty", []string{"Alpha", "Beta", "Gamma"}, empty, 0, 0, 0, 36)
 	cbEmpty.Placeholder = "Pick a letter…"
 
-	pVariants.AddChild(comboCaption("b15-v1", "Short option list"))
+	pVariants.AddChild(comboCaption("b15-v1", "Short list — already has a selection (Go)."))
 	pVariants.AddChild(cbLang)
-	pVariants.AddChild(comboCaption("b15-v2", "Placeholder when unset"))
+	pVariants.AddChild(comboCaption("b15-v2", "Placeholder when unset — starts empty; type or pick."))
 	pVariants.AddChild(cbEmpty)
 
 	pScroll := ui.NewPanel("b15-scroll", "Scroll test", 0, 0, 0, 0)

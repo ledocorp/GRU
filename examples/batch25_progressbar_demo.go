@@ -15,25 +15,30 @@ func init() { Register(func() Scene { return &batch25ProgressBarScene{} }) }
 // Recipe: CP-SHELL-PAGE + NewBatchPageGrid.
 type batch25ProgressBarScene struct {
 	BaseScene
-	upload *ui.Signal[float32]
+	bar     *ui.ProgressBar
+	status  *ui.Signal[string]
+	running bool
 }
 
 func (s *batch25ProgressBarScene) Title() string { return "Batch 25 · ProgressBar" }
 
 func (s *batch25ProgressBarScene) OnUpdate(_ *ui.Document, dt float32) {
-	if s.upload == nil {
+	if s.bar == nil || !s.running {
 		return
 	}
-	v := s.upload.Get()
+	v := s.bar.Value.Get() + dt*0.15
 	if v >= 1 {
+		s.bar.Value.Set(1)
+		s.running = false
+		s.bar.SetLiveAnimation(false) // bake final fill into SSAA cache
+		if s.status != nil {
+			s.status.Set("Transfer complete — backup.zip")
+		}
 		return
 	}
-	v += dt * 0.12
-	if v > 1 {
-		v = 1
-	}
-	s.upload.Set(v)
-	ui.Wake(ui.WakeAnimation, "b25-upload")
+	s.bar.Value.Set(v)
+	// CollectAnimationWake (SetLiveAnimation) drives frames — do not WakeDataUpdate
+	// or MarkDirty; those pin ActiveFPS (60) for the whole run.
 }
 
 func setSpans5ProgressPanel(p *ui.Panel, xs, sm, md, lg, xl int) {
@@ -58,24 +63,26 @@ func (s *batch25ProgressBarScene) Build(doc *ui.Document) {
 	pUpload.Gap = 10
 	pUpload.TitleHeight = 32
 
-	s.upload = ui.NewSignal(float32(0.35))
-	bar := ui.NewProgressBar("b25-bar", s.upload.Get(), 0, 0, 0, 24)
-	bar.Value = s.upload
-	status, statusDisplay := FlexCopyPair("b25-status", "form-value", "")
-	s.upload.Subscribe(func() {
-		statusDisplay.Set(fmt.Sprintf("Transferring backup.zip — %d%%", int(s.upload.Get()*100)))
-	})
-	s.upload.Set(s.upload.Get())
+	s.bar = ui.NewProgressBar("b25-bar", 0, 0, 0, 0, 24)
+	s.bar.SetLiveAnimation(true)
+	s.running = true
+	// Static caption while running — per-% text dirties the tree and pins 60 FPS.
+	statusRT, statusDisplay := FlexCopyPair("b25-status", "form-value", "Transferring backup.zip…")
+	s.status = statusDisplay
 
 	reset := ui.NewButton("b25-reset", "Restart demo", 0, 0, 120, 36)
 	reset.SetStyle("button")
 	reset.OnClick = func() {
-		s.upload.Set(0)
+		s.bar.Value.Set(0)
+		s.bar.SetLiveAnimation(true)
+		s.running = true
+		statusDisplay.Set("Transferring backup.zip…")
 	}
 
-	pUpload.AddChild(batchCaption("b25-cap", "Non-interactive — bind Value to a Signal or drive from OnUpdate."))
-	pUpload.AddChild(bar)
-	pUpload.AddChild(status)
+	pUpload.AddChild(batchCaption("b25-cap",
+		"Live fill uses the animation overlay — expect ActiveFPS briefly, then AnimationFPS (36)."))
+	pUpload.AddChild(s.bar)
+	pUpload.AddChild(statusRT)
 	pUpload.AddChild(reset)
 
 	pSteps := ui.NewPanel("b25-steps", "Step milestones", 0, 0, 0, 0)

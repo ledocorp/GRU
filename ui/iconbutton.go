@@ -169,6 +169,16 @@ func (ib *IconButton) Update(_ float32) {
 	if ib.IsHidden() {
 		return
 	}
+	if ScenePointerBlocked() {
+		if ib.hovered || ib.pressed {
+			ib.hovered = false
+			ib.pressed = false
+			if !ib.ghostChrome() {
+				ib.MarkDrawDirty()
+			}
+		}
+		return
+	}
 	mouse := rl.GetMousePosition()
 	prevHovered := ib.hovered
 	prevPressed := ib.pressed
@@ -182,7 +192,8 @@ func (ib *IconButton) Update(_ float32) {
 	if ib.Scale != 1.0 && (ib.hovered != prevHovered || ib.pressed != prevPressed) {
 		ib.MarkDrawDirty()
 	}
-	if ib.hovered && (PointerClickConsume(ib.Bounds()) || rl.IsMouseButtonPressed(rl.MouseLeftButton)) {
+	// PointerClickConsume only — raw IsMouseButtonPressed bypassed drawer/modal blocks.
+	if ib.hovered && PointerClickConsume(ib.Bounds()) {
 		if ib.OnClick != nil {
 			ib.OnClick()
 		}

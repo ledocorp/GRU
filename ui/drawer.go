@@ -153,6 +153,11 @@ func (d *drawerManager) panelRect(sw, sh float32) rl.Rectangle {
 	return d.host.SlidePanelRect(band, w)
 }
 
+// ContentBandHitRect is the scrim/content band used to block scene pointer hit-tests.
+func (d *drawerManager) ContentBandHitRect(sw, sh float32) rl.Rectangle {
+	return d.host.ContentBand(sw, sh)
+}
+
 // Update advances animation and handles input.
 func (d *drawerManager) Update(dt float32) {
 	if !d.host.Open {

@@ -166,8 +166,8 @@ func (s *batch1Scene) Build(doc *ui.Document) {
 	tab3Content.Gap = 8
 	tab3Content.SetFlexGrow(1)
 	tab3Content.AddChild(b1Body("t3l1", "Analytics tab."))
+	// Keep height 24 — FlexGrow in a tall FlexColumn turned the pill bar into a giant oval.
 	pb := ui.NewProgressBar("t3-pb", 0.65, 0, 0, 0, 24)
-	pb.SetFlexGrow(1)
 	tab3Content.AddChild(pb)
 
 	tv.AddTab("Overview", tab1Content)

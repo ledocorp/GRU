@@ -17,14 +17,14 @@ const (
 	cpSvH  = float32(150) // saturation/value box height
 	cpBarH = float32(20)  // hue / alpha bar height
 	cpGap  = float32(10)  // vertical gap between sections
-	cpPrvH = float32(36)  // preview row height (old + new swatches + hex)
+	cpPrvH = float32(64)  // preview: 44px swatches + gap + "old"/"new" labels
 
 	cpSwatchW = float32(52) // Bootstrap-ish input height row (fixed swatch width)
 	cpSwatchH = float32(36)
 
 	// Computed total popup heights (top-pad + sections + gaps + bottom-pad).
-	cpPopHNoAlpha = cpPad + cpSvH + cpGap + cpBarH + cpGap + cpPrvH + cpPad                  // ≈ 254
-	cpPopHAlpha   = cpPad + cpSvH + cpGap + cpBarH + cpGap + cpBarH + cpGap + cpPrvH + cpPad // ≈ 284
+	cpPopHNoAlpha = cpPad + cpSvH + cpGap + cpBarH + cpGap + cpPrvH + cpPad                  // ≈ 282
+	cpPopHAlpha   = cpPad + cpSvH + cpGap + cpBarH + cpGap + cpBarH + cpGap + cpPrvH + cpPad // ≈ 312
 )
 
 // ── ColorPicker widget (swatch in the widget tree) ────────────────────────────
@@ -35,7 +35,7 @@ const (
 // Layout: embed in any FlexColumn or FlexRow container.  Pass w=0 for the default
 // compact swatch (52×36 px); set explicit w/h for custom sizes.
 //
-// Popup: click the swatch to open a 300×254 (or 300×284 with alpha) overlay
+// Popup: click the swatch to open a 300×~270 (or 300×~300 with alpha) overlay
 // showing an SV box, hue bar, optional alpha slider, and a preview row with
 // old/new swatches and a hex string.  Close with Escape or click outside.
 //
@@ -139,31 +139,6 @@ func (cp *ColorPicker) drawInternal() {
 	c := cp.Value.Get()
 	style := cp.GetStyle()
 
-	// Checkerboard background for semi-transparent colors.
-	if c.A < 255 {
-		ck := int32(8)
-		bx0, by0 := int32(b.X), int32(b.Y)
-		bx1, by1 := int32(b.X+b.Width), int32(b.Y+b.Height)
-		for cx := bx0; cx < bx1; cx += ck {
-			for cy := by0; cy < by1; cy += ck {
-				light := ((cx-bx0)/ck+(cy-by0)/ck)%2 == 0
-				col := rl.NewColor(180, 180, 180, 255)
-				if light {
-					col = rl.NewColor(240, 240, 240, 255)
-				}
-				w := ck
-				if bx1-cx < ck {
-					w = bx1 - cx
-				}
-				h := ck
-				if by1-cy < ck {
-					h = by1 - cy
-				}
-				rl.DrawRectangle(cx, cy, w, h, col)
-			}
-		}
-	}
-
 	bw := style.BorderWidth
 	if bw < 1 {
 		bw = 1
@@ -189,17 +164,98 @@ func (cp *ColorPicker) drawInternal() {
 		borderCol = rl.NewColor(79, 70, 229, 255)
 	}
 
-	drawRoundedInsetBorder(b, rn, bw, borderCol, c)
+	// Panel swatch chrome: same solid inset border as Checkbox (not LinesEx).
+	paintColorPickerSwatch(b, c, borderCol, bw, rn)
 
-	// Chevron hint (bottom-right).
+	// Chevron hint (bottom-right) — dark when swatch is light/transparent.
+	chev := rl.NewColor(255, 255, 255, 200)
+	if c.A < 140 || (int(c.R)+int(c.G)+int(c.B) > 520) {
+		chev = rl.NewColor(40, 42, 60, 200)
+	}
 	ax := b.X + b.Width - 10
 	ay := b.Y + b.Height - 7
 	rl.DrawTriangle(
 		rl.NewVector2(ax-4, ay-2),
 		rl.NewVector2(ax+4, ay-2),
 		rl.NewVector2(ax, ay+2),
-		rl.NewColor(255, 255, 255, 200),
+		chev,
 	)
+}
+
+// paintColorPickerSwatch draws a compact swatch with Checkbox-style inset border.
+// Used by the panel face and the popup old/new preview squares.
+func paintColorPickerSwatch(b rl.Rectangle, c, borderCol rl.Color, bw, rn float32) {
+	b = snapControlRect(b)
+	if bw < 1 {
+		bw = 1
+	}
+	shorter := b.Width
+	if b.Height < shorter {
+		shorter = b.Height
+	}
+	if c.A < 255 {
+		well := rl.NewColor(250, 250, 252, 255)
+		drawRoundedInsetBorder(b, rn, bw, borderCol, well)
+		inner := snapControlRect(rl.NewRectangle(b.X+bw, b.Y+bw, b.Width-2*bw, b.Height-2*bw))
+		if inner.Width <= 2 || inner.Height <= 2 {
+			return
+		}
+		drawColorPickerCheckerboard(inner, 6)
+		if c.A == 0 {
+			return
+		}
+		innerRN := rn
+		if shorter > 0 {
+			innerShort := inner.Width
+			if inner.Height < innerShort {
+				innerShort = inner.Height
+			}
+			if innerShort > 0 {
+				r := (rn * shorter / 2)
+				if r > bw {
+					r -= bw
+				} else {
+					r = 0
+				}
+				innerRN = (r * 2) / innerShort
+				if innerRN > 1 {
+					innerRN = 1
+				}
+			}
+		}
+		if innerRN > 0 {
+			rl.DrawRectangleRounded(inner, innerRN, 32, c)
+		} else {
+			rl.DrawRectangleRec(inner, c)
+		}
+		return
+	}
+	drawRoundedInsetBorder(b, rn, bw, borderCol, c)
+}
+
+func drawColorPickerCheckerboard(r rl.Rectangle, ck int32) {
+	if ck < 2 {
+		ck = 2
+	}
+	bx0, by0 := int32(r.X), int32(r.Y)
+	bx1, by1 := int32(r.X+r.Width), int32(r.Y+r.Height)
+	for cx := bx0; cx < bx1; cx += ck {
+		for cy := by0; cy < by1; cy += ck {
+			light := ((cx-bx0)/ck+(cy-by0)/ck)%2 == 0
+			col := rl.NewColor(180, 180, 180, 255)
+			if light {
+				col = rl.NewColor(240, 240, 240, 255)
+			}
+			w, h := ck, ck
+			if bx1-cx < ck {
+				w = bx1 - cx
+			}
+			if by1-cy < ck {
+				h = by1 - cy
+			}
+			rl.DrawRectangle(cx, cy, w, h, col)
+		}
+	}
 }
 
 // ── HSV ↔ RGB helpers (package-level; used by ColorPicker and Inspector) ─────
@@ -634,70 +690,56 @@ func (m *colorPickerManager) drawHueBar(a uint8, mul func(rl.Color) rl.Color) {
 		rl.NewColor(0, 0, 0, uint8(float32(a)*0.45)))
 }
 
-// drawAlphaBar draws the checkerboard + gradient alpha slider and its thumb.
-func (m *colorPickerManager) drawAlphaBar(a uint8, mul func(rl.Color) rl.Color) {
+// drawAlphaBar draws the checkerboard + opacity ramp and its thumb.
+// Column strips (not DrawRectangleGradientH): GPU alpha gradients often smear RGB
+// toward odd hues when the transparent stop has A=0.
+func (m *colorPickerManager) drawAlphaBar(_ uint8, mul func(rl.Color) rl.Color) {
 	r := m.alphaBarRect()
+	drawColorPickerCheckerboard(r, 8)
 
-	// Checkerboard background.
-	ck := int32(8)
-	bx0, by0 := int32(r.X), int32(r.Y)
-	bx1, by1 := int32(r.X+r.Width), int32(r.Y+r.Height)
-	for cx := bx0; cx < bx1; cx += ck {
-		for cy := by0; cy < by1; cy += ck {
-			light := ((cx-bx0)/ck+(cy-by0)/ck)%2 == 0
-			col := rl.NewColor(180, 180, 180, 255)
-			if light {
-				col = rl.NewColor(240, 240, 240, 255)
-			}
-			w := ck
-			if bx1-cx < ck {
-				w = bx1 - cx
-			}
-			h := ck
-			if by1-cy < ck {
-				h = by1 - cy
-			}
-			rl.DrawRectangle(cx, cy, w, h, col)
-		}
-	}
-
-	// Color gradient: transparent (left) → opaque current color (right).
 	cc := hsvToColor(m.h, m.s, m.v, 1)
-	transparent := rl.NewColor(cc.R, cc.G, cc.B, 0)
-	opaque := rl.NewColor(cc.R, cc.G, cc.B, a)
-	DrawHorizontalGradientRect(r, transparent, opaque)
+	cols := int(r.Width)
+	if cols < 1 {
+		cols = 1
+	}
+	for i := 0; i < cols; i++ {
+		t := float32(i) / float32(cols-1)
+		if cols == 1 {
+			t = 1
+		}
+		col := rl.NewColor(cc.R, cc.G, cc.B, uint8(t*255*m.fade+0.5))
+		rl.DrawRectangle(int32(r.X)+int32(i), int32(r.Y), 1, int32(r.Height), col)
+	}
 	rl.DrawRectangleLinesEx(r, 1, mul(rl.NewColor(200, 202, 218, 255)))
 
-	// Vertical thumb.
 	tx := r.X + m.aVal*r.Width
-	rl.DrawRectangle(int32(tx)-1, int32(r.Y)-2, 3, int32(r.Height)+4, rl.NewColor(255, 255, 255, a))
+	rl.DrawRectangle(int32(tx)-1, int32(r.Y)-2, 3, int32(r.Height)+4, mul(rl.NewColor(255, 255, 255, 255)))
 	rl.DrawRectangleLinesEx(rl.NewRectangle(tx-2, r.Y-3, 5, r.Height+6), 1,
-		rl.NewColor(0, 0, 0, uint8(float32(a)*0.45)))
+		mul(rl.NewColor(0, 0, 0, 115)))
 }
 
 // drawPreviewRow draws old/new color swatches and the hex string.
 func (m *colorPickerManager) drawPreviewRow(_ uint8, mul func(rl.Color) rl.Color) {
 	r := m.previewRowRect()
 	const sw = float32(44)
+	const bw = float32(1)
+	const rn = float32(0.2)
+	const labelGap = float32(5) // space between swatch bottom and "old"/"new"
 
 	newColor := hsvToColor(m.h, m.s, m.v, m.aVal)
+	border := mul(rl.NewColor(200, 202, 218, 255))
 
-	// Old color swatch.
-	oldRec := rl.NewRectangle(r.X, r.Y+(r.Height-sw)*0.5, sw, sw)
-	rl.DrawRectangleRounded(oldRec, 0.2, 6, mul(m.original))
-	rl.DrawRectangleRoundedLinesEx(oldRec, 0.2, 6, 1, mul(rl.NewColor(0, 0, 0, 50)))
+	// Swatches sit at the top of the preview band; labels clear below them.
+	oldRec := snapControlRect(rl.NewRectangle(r.X, r.Y, sw, sw))
+	paintColorPickerSwatch(oldRec, mul(m.original), border, bw, rn)
 
-	// ">" arrow.
 	arrowX := r.X + sw + 8
-	arrowY := r.Y + r.Height/2 - 8
+	arrowY := r.Y + sw/2 - 8
 	DrawText(">", arrowX, arrowY, 14, mul(rl.NewColor(140, 144, 168, 255)))
 
-	// New color swatch.
-	newRec := rl.NewRectangle(r.X+sw+22, r.Y+(r.Height-sw)*0.5, sw, sw)
-	rl.DrawRectangleRounded(newRec, 0.2, 6, mul(newColor))
-	rl.DrawRectangleRoundedLinesEx(newRec, 0.2, 6, 1, mul(rl.NewColor(0, 0, 0, 50)))
+	newRec := snapControlRect(rl.NewRectangle(r.X+sw+22, r.Y, sw, sw))
+	paintColorPickerSwatch(newRec, mul(newColor), border, bw, rn)
 
-	// Hex string to the right.
 	var hexStr string
 	if m.target != nil && m.target.ShowAlpha {
 		hexStr = fmt.Sprintf("#%02X%02X%02X%02X",
@@ -706,11 +748,10 @@ func (m *colorPickerManager) drawPreviewRow(_ uint8, mul func(rl.Color) rl.Color
 		hexStr = fmt.Sprintf("#%02X%02X%02X", newColor.R, newColor.G, newColor.B)
 	}
 	textX := r.X + sw*2 + 28
-	textY := r.Y + r.Height/2 - 8
+	textY := r.Y + sw/2 - 8
 	DrawText(hexStr, textX, textY, 13, mul(rl.NewColor(40, 44, 70, 255)))
 
-	// Small "old" / "new" labels below each swatch.
-	labelY := r.Y + r.Height - 12
+	labelY := r.Y + sw + labelGap
 	labelCol := mul(rl.NewColor(140, 144, 168, 255))
 	DrawText("old", r.X+4, labelY, 10, labelCol)
 	DrawText("new", r.X+sw+22+4, labelY, 10, labelCol)
