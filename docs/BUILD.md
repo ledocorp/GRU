@@ -71,7 +71,7 @@ go run -tags webview2 ./cmd/webviewhello
 Agent-run smoke (2026-07-29):
 
 - [x] `TestPublicAllowlist` green
-- [x] **grudemo** starts on **Counter Demo** (`grudemo: 35 public scenes (start=Counter Demo)`)
+- [x] **grudemo** starts on **Counter Demo** (`grudemo: 40 public scenes (start=Counter Demo)`)
 - [x] Window presents (`presenting first frame…`); ran ~2 min — Gallery + Demo Index visited; clean exit path (Windows `0xc000041d` on close is a known Raylib/GLFW teardown quirk, not a start panic)
 - [x] **webviewhello** starts with live WebView2 (`Environment created successfully`; FillClient host loop banner)
 - [x] Title-bar grab + double-click + FillClient edge resize — already signed off in the WebView completion session (not re-blocking the docs cut)
