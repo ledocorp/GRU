@@ -14,6 +14,7 @@ This folder is the public docs home for Gru — the same paths ship in the GitHu
 | Doc | What you get |
 |-----|----------------|
 | [CHEATSHEET.md](CHEATSHEET.md) | Commands, intent index, capability matrices, Status gap tracker |
+| [LAYOUT.md](LAYOUT.md) | Height modes, scroll owner, author checklist |
 
 Use this when you already know the kind of UI you need. Guides below teach; the cheatsheet routes.
 

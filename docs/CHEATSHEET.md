@@ -33,7 +33,7 @@ go run ./cmd/gru new myapp
 
 | Tag / flag | When |
 |------------|------|
-| `grudemo` | Curated 35-scene catalog |
+| `grudemo` | Curated 40-scene catalog |
 | `webview2` | Live WebView2 host (Windows + Runtime) |
 | `x11` | Linux hello path |
 | `gru new --webview` | Scaffold FillClient WebView app |
@@ -98,6 +98,12 @@ Contracts: [architecture/overview.md](architecture/overview.md).
 | Reactive counter | `Signal` + `Button` | Counter Demo | ok |
 | Inspect widget tree | F12 Inspector | any grudemo | ok |
 | Embed live WebView | `-tags webview2` · `WebViewPanel` | WebView Module · Focus Handoff | ok |
+| Modal over WebView | `ShowModal` (engine occludes HWND) | Focus Handoff · [WEBVIEW.md](WEBVIEW.md) | ok |
+| Breadcrumb path | `Breadcrumbs` | Batch 17 · Breadcrumbs | ok |
+| Color well / picker | `ColorWell` · `ColorPicker` | Batch 18 · Batch 26 | ok |
+| Dropdown select | `Dropdown` | Batch 19 · Dropdown | ok |
+| Radio group | `RadioGroup` | Batch 20 · RadioGroup | ok |
+| Height / scroll rules | intrinsic · fill · fixed | [LAYOUT.md](LAYOUT.md) | ok |
 
 ---
 
@@ -151,7 +157,11 @@ Contracts: [architecture/overview.md](architecture/overview.md).
 | `NavigationRail` · `AppBar` | Desktop / App Shell | navigation-widgets.md · shells.md | ok |
 | `DataTable` | Batch 6 | [data-display.md](widgets/data-display.md) | ok |
 | `Badge` · `Label` · `RichText` | Batch 3 · Timeline | data-display.md | ok |
-| `ColorWell` | Filters (indirect) | filters-toolbar.md | demo-thin |
+| `ColorWell` | Batch 18 · ColorWell | filters-toolbar.md | ok |
+| `ColorPicker` | Batch 26 · ColorPicker | forms.md · filters-toolbar.md | ok |
+| `Dropdown` | Batch 19 · Dropdown | forms.md | ok |
+| `RadioGroup` | Batch 20 · RadioGroup | selection.md | ok |
+| `Breadcrumbs` | Batch 17 · Breadcrumbs | navigation-widgets.md | ok |
 | Theme v2 / `SetStyleVariant` | Theme v2 Foundation | [theme-v2.md](widgets/theme-v2.md) | ok |
 | DocumentSpec / `.gru` | Gallery (.gru) | [document-gru.md](widgets/document-gru.md) | ok |
 
@@ -175,7 +185,7 @@ Contracts: [architecture/overview.md](architecture/overview.md).
 | FillClient shell | `cmd/webviewhello` | WEBVIEW.md · [api/webview-api.md](api/webview-api.md) | ok |
 | `WebViewPanel` | WebView Module Demo | widgets/webview.md | ok |
 | Focus handoff | WebView Focus Handoff | WEBVIEW.md | ok |
-| Host occlusion over modals | (contract) | WEBVIEW.md | doc-thin |
+| Host occlusion over modals | Focus Handoff · `ShowModal` | WEBVIEW.md (occlusion howto) | ok |
 | Linux / non-Windows live host | — | — | missing |
 
 ### Tooling
@@ -237,22 +247,24 @@ Before each public cut:
 4. Private products stay `private`, never `ok`.
 5. Prefer fixing `demo-thin` / `doc-thin` over adding aspirational `missing` rows.
 
-### Triage (v0.7.x)
+### Triage (post 0.7.0 local)
 
-Accepted for 0.7.x (fix later, not blockers):
+Closed in this staging pass:
+
+| Item | Was | Now |
+|------|-----|-----|
+| WebView modal occlusion howto | doc-thin | ok (`WEBVIEW.md`) |
+| ColorWell / ColorPicker / Dropdown / RadioGroup / Breadcrumbs demos | deferred / demo-thin | ok (public catalog) |
+| Slim layout contracts | internal-only | ok (`LAYOUT.md` + architecture/layout) |
+
+Still accepted later (not blockers):
 
 | Item | Status | Note |
 |------|--------|------|
 | `SplitView` standalone demo | demo-thin | Covered inside List Pane |
-| `ColorWell` dedicated scene | demo-thin | Seen via Filters |
-| WebView modal occlusion walkthrough | doc-thin | Contract in WEBVIEW.md; wants a short howto |
+| FilePicker dedicated public scene | deferred | Demo exists; keep private until path UX reviewed |
 | Non-Windows live WebView | missing | Windows-only host for now |
 | Automated cheatsheet/CI drift check | missing | Nice-to-have |
-
-Near-term candidates (if touching docs next):
-
-- Expand WebView occlusion howto (`doc-thin` → `ok`)
-- One-line `SplitView` callout in list-pane demo notes
 
 ---
 

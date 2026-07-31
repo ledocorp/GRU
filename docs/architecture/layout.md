@@ -35,7 +35,9 @@ Document.Root          LayoutAbsolute (window-sized)
 
 ---
 
-## Three height modes
+## Three height modes (author contract)
+
+Pick **one** mode per node. Do not leave height meaning implicit.
 
 | Mode | Typical setup | Meaning |
 |------|---------------|---------|
@@ -45,10 +47,23 @@ Document.Root          LayoutAbsolute (window-sized)
 
 Rules:
 
-1. Measure width-first.
+1. Measure width-first (parent assigns width, then child `Layout`).
 2. Internal probe heights must never stick as the final `bounds.Height`.
 3. Intrinsic wins when content grows; fill wins on an assigned band.
 4. Overlay children are excluded from layout extent measurement.
+5. Name the mode in code reviews the same way you name a shell ID.
+
+### Author checklist
+
+| Situation | Prefer |
+|-----------|--------|
+| Form / card stack that grows | Intrinsic panels inside a **page-scroll Viewport** |
+| Side-by-side panes that share height | Fill (`FlexGrow`) children in a filled row |
+| Toolbar / title band | Fixed or intrinsic; not a second page scroll |
+| Accordion / expanding content | Intrinsic host + extent sync upward |
+| Equal-height grid rows | Explicit `GridRowSizingEqualFill` (opt-in) |
+
+Full composition recipes: [../COMPOSITION.md](../COMPOSITION.md). Cheatsheet intent rows: [../CHEATSHEET.md](../CHEATSHEET.md).
 
 ---
 

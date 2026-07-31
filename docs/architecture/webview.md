@@ -74,7 +74,9 @@ When `FillClient=true`, the flush HWND covers Raylib edge grips. The **page** ow
 
 ## Idle / frame budget
 
-Web paint is independent of Gru redraw. Alive hosts use a WebView idle FPS floor; `SampleChromeHoverWake` keeps the title/web client snappy without global mouse wake. Native modals under a full-client HWND are limited by HWND z-order — hide via occlusion or use bridge UI.
+Web paint is independent of Gru redraw. Alive hosts use a WebView idle FPS floor; `SampleChromeHoverWake` keeps the title/web client snappy without global mouse wake.
+
+Native modals under a full-client HWND cannot paint above the browser. Use engine occlusion (`WebViewHostOccluded` via `ShowModal` / drawer / bottom sheet) so hosts hide until the overlay closes. Howto: [../WEBVIEW.md](../WEBVIEW.md#modals-and-overlays-over-webview-occlusion). Demo: WebView Focus Handoff.
 
 ---
 

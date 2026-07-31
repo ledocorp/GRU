@@ -35,7 +35,7 @@ go build -tags grudemo -o dist/GruDemo.exe .
 go test ./examples/ -run TestPublicAllowlist -count=1
 ```
 
-All 34 allowlisted scenes must register and `Build` without panic.
+All 40 allowlisted scenes must register and `Build` without panic.
 
 | Tag | Effect |
 |-----|--------|

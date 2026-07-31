@@ -64,6 +64,7 @@ go run ./cmd/gru new myapp --webview
 |-------|------|
 | Docs home | [docs/README.md](docs/README.md) |
 | Cheatsheet | [docs/CHEATSHEET.md](docs/CHEATSHEET.md) |
+| Layout contracts | [docs/LAYOUT.md](docs/LAYOUT.md) |
 | Getting started | [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) |
 | CLI | [docs/CLI.md](docs/CLI.md) |
 | Composition | [docs/COMPOSITION.md](docs/COMPOSITION.md) |

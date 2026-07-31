@@ -10,7 +10,7 @@ Gru’s interactive widgets live in package **`ui`**. Learn them from **curated 
 
 ```bash
 go run ./cmd/hello                              # minimal Button + Card sample
-go run -tags grudemo .                          # 35-scene catalog (Tab = next scene)
+go run -tags grudemo .                          # 40-scene catalog (Tab = next scene)
 go run -tags "grudemo,webview2" .               # live WebView demos (Windows)
 ```
 
@@ -22,7 +22,7 @@ go run -tags "grudemo,webview2" .               # live WebView demos (Windows)
 
 ---
 
-## Scene → widget families (35 scenes)
+## Scene → widget families (40 scenes)
 
 Titles match `Scene.Title()` exactly — see [../DEMO_INDEX.md](../DEMO_INDEX.md).
 
@@ -56,13 +56,18 @@ Titles match `Scene.Title()` exactly — see [../DEMO_INDEX.md](../DEMO_INDEX.md
 | 26 | Batch 14 · SegmentedControl | [Selection](selection.md) | [selection.md](selection.md) |
 | 27 | Batch 15 · ComboBox | [Forms](forms.md), [Selection](selection.md) | [forms.md](forms.md) |
 | 28 | Batch 16 · SpinBox | [Forms](forms.md) | [forms.md](forms.md) |
-| 29 | Batch 21 · ListTile | [List tile](list-tile.md), [Surfaces](surfaces.md) | [list-tile.md](list-tile.md) |
-| 30 | Batch 22 · Toggle | [Selection](selection.md), [List tile](list-tile.md) | [selection.md](selection.md) |
-| 31 | Batch 23 · Checkbox | [Selection](selection.md) | [selection.md](selection.md) |
-| 32 | Batch 24 · Slider | [Sliders & progress](sliders-progress.md) | [sliders-progress.md](sliders-progress.md) |
-| 33 | Batch 25 · ProgressBar | [Sliders & progress](sliders-progress.md) | [sliders-progress.md](sliders-progress.md) |
-| 34 | WebView Module Demo | [WebView](webview.md) | [webview.md](webview.md) |
-| 35 | WebView Focus Handoff | [WebView](webview.md) | [webview.md](webview.md) |
+| 29 | Batch 17 · Breadcrumbs | [Navigation widgets](navigation-widgets.md) | [navigation-widgets.md](navigation-widgets.md) |
+| 30 | Batch 18 · ColorWell | [Filters / toolbar](filters-toolbar.md) | [filters-toolbar.md](filters-toolbar.md) |
+| 31 | Batch 19 · Dropdown | [Forms](forms.md), [Selection](selection.md) | [forms.md](forms.md) |
+| 32 | Batch 20 · RadioGroup | [Selection](selection.md) | [selection.md](selection.md) |
+| 33 | Batch 21 · ListTile | [List tile](list-tile.md), [Surfaces](surfaces.md) | [list-tile.md](list-tile.md) |
+| 34 | Batch 22 · Toggle | [Selection](selection.md), [List tile](list-tile.md) | [selection.md](selection.md) |
+| 35 | Batch 23 · Checkbox | [Selection](selection.md) | [selection.md](selection.md) |
+| 36 | Batch 24 · Slider | [Sliders & progress](sliders-progress.md) | [sliders-progress.md](sliders-progress.md) |
+| 37 | Batch 25 · ProgressBar | [Sliders & progress](sliders-progress.md) | [sliders-progress.md](sliders-progress.md) |
+| 38 | Batch 26 · ColorPicker | [Forms](forms.md), [Filters / toolbar](filters-toolbar.md) | [forms.md](forms.md) |
+| 39 | WebView Module Demo | [WebView](webview.md) | [webview.md](webview.md) |
+| 40 | WebView Focus Handoff | [WebView](webview.md) | [webview.md](webview.md) |
 
 ---
 
@@ -102,7 +107,7 @@ Titles match `Scene.Title()` exactly — see [../DEMO_INDEX.md](../DEMO_INDEX.md
 
 ---
 
-## Standalone samples (outside the 35-scene list)
+## Standalone samples (outside the 40-scene list)
 
 | Sample | Command | What it shows |
 |--------|---------|---------------|

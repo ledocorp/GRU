@@ -11,7 +11,7 @@ const PublicDemoStartTitle = "Counter Demo"
 // PublicDirectorySceneTitle is the grudemo scene picker (footer Scenes button).
 const PublicDirectorySceneTitle = "Demo Index"
 
-// publicSceneTitles is the frozen v0 public set (35 scenes incl. Demo Index).
+// publicSceneTitles is the public grudemo set (40 scenes incl. Demo Index).
 var publicSceneTitles = []string{
 	"Demo Index",
 	"Desktop Shell (Go)",
@@ -41,11 +41,16 @@ var publicSceneTitles = []string{
 	"Batch 14 · SegmentedControl",
 	"Batch 15 · ComboBox",
 	"Batch 16 · SpinBox",
+	"Batch 17 · Breadcrumbs",
+	"Batch 18 · ColorWell",
+	"Batch 19 · Dropdown",
+	"Batch 20 · RadioGroup",
 	"Batch 21 · ListTile",
 	"Batch 22 · Toggle",
 	"Batch 23 · Checkbox",
 	"Batch 24 · Slider",
 	"Batch 25 · ProgressBar",
+	"Batch 26 · ColorPicker",
 	"WebView Module Demo",
 	"WebView Focus Handoff",
 }

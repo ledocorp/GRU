@@ -86,7 +86,7 @@ go run -tags grudemo .
 - **Tab** — next scene  
 - **F12** — Inspector  
 
-Allowlisted titles: [DEMO_INDEX.md](DEMO_INDEX.md) (35 scenes).
+Allowlisted titles: [DEMO_INDEX.md](DEMO_INDEX.md) (40 scenes).
 
 Optional WebView demos: `go run -tags "grudemo,webview2" .` (Windows + WebView2 runtime).
 

@@ -70,6 +70,35 @@ On client resize: mark WebView hosts for force bounds sync; keep last COM bounds
 
 ---
 
+## Modals and overlays over WebView (occlusion)
+
+The live WebView2 HWND sits **above** the OpenGL blit. A native modal drawn in Raylib cannot paint on top of that HWND. Gru therefore **hides** live hosts while a blocking overlay is open.
+
+| Overlay | Occludes WebView? |
+|---------|-------------------|
+| Modal (`ShowModal`) | Yes |
+| Drawer / bottom sheet | Yes |
+| Context menu, toast, title bar | No (native layers beside the panel) |
+
+**Engine rule:** `WebViewHostOccluded()` is true when a modal, drawer, or bottom sheet is visible. Host sync then calls `SetVisible(false)` on live hosts until the overlay closes. You do not call this yourself when using `ShowModal` / standard drawers.
+
+**What you should do**
+
+1. Use `ui.ShowModal(...)` (or the drawer APIs) for blocking UI over a scene that contains `WebViewPanel`.
+2. Keep the modal body **flat flex** (no `Viewport` as modal root). Same composition rule as native-only apps.
+3. Verify with **WebView Focus Handoff**: button “Open modal (hides web host)” — the web panel should disappear for the modal and return when closed.
+4. Run with `-tags webview2` so the host is live; without the tag there is no HWND to occlude.
+
+**What not to do**
+
+| Don’t | Why |
+|-------|-----|
+| Invent click-through / `WS_EX_TRANSPARENT` so GL “shows through” the web | Blank or broken compositing |
+| Manually hide the host every frame outside overlay APIs | Fights sync; easy to leave the host stuck hidden |
+| Expect a Raylib-drawn dialog to appear *on top of* a visible HWND | Z-order makes that impossible without occlusion |
+
+---
+
 ## Anti-patterns (do not reintroduce)
 
 | Anti-pattern | Why it fails |
