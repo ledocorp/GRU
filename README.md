@@ -1,6 +1,6 @@
 # Gru
 
-**Version:** [0.7.1](https://github.com/ledocorp/GRU/releases/tag/v0.7.1)
+**Version:** [0.7.2](https://github.com/ledocorp/GRU/releases/tag/v0.7.2)
 
 **Gru (GRU)** is a Go-first UI toolkit (retained-mode, Raylib-backed) for building desktop applications.
 
@@ -19,9 +19,18 @@
 - **`cmd/gru`** — scaffold, build, and package apps (`gru new`, `gru build`, `gru package`)  
 - **Sample apps** — `cmd/hello` (native) and `cmd/webviewhello` (FillClient WebView shell)
 
+## Showcase app (separate repo)
+
+**[Gru Notepad](https://github.com/shawnlondono/gru-notepad)** is a product-shaped example of this toolkit
+(editor, sessions, markdown preview, syntax, spell). It `require`s `github.com/ledocorp/gru` and is **not**
+vendored into this repository.
+
+- Repo: [github.com/shawnlondono/gru-notepad](https://github.com/shawnlondono/gru-notepad)  
+- Site: [ledocorp.org/gru/notepad](https://ledocorp.org/gru/notepad)  
+- Clips: [X thread](https://x.com/ledocorp/status/2085492726074626160)
+
 ## What’s not in this repository
 
-- Gru Notepad / Gru Notes (private for now)  
 - Prism (paused / private)  
 - Full Studio testing harness and private catalog  
 - Foundry R&D (internal)  
@@ -33,7 +42,7 @@ Commercial dual-licensing may come later; it is **not** part of this release.
 ## Module
 
 ```bash
-go get github.com/ledocorp/gru@v0.7.1
+go get github.com/ledocorp/gru@v0.7.2
 ```
 
 ```go

@@ -1,6 +1,6 @@
-# Gru cheatsheet (v0.7.1)
+# Gru cheatsheet (v0.7.2)
 
-Fingertip lookup for the public toolkit **as shipped in v0.7.1**. Guides teach; this page answers *what exists* and *where to jump*.
+Fingertip lookup for the public toolkit **as shipped in v0.7.2**. Guides teach; this page answers *what exists* and *where to jump*.
 
 **Module:** `github.com/ledocorp/gru` · **Package:** `ui`  
 **Site:** [ledocorp.org/gru/docs/cheatsheet](https://www.ledocorp.org/gru/docs/cheatsheet/)  
@@ -24,7 +24,7 @@ Scan Status ≠ `ok` before a release. That list *is* the gap backlog.
 ## 1. Commands
 
 ```bash
-go get github.com/ledocorp/gru@v0.7.1
+go get github.com/ledocorp/gru@v0.7.2
 go run ./cmd/hello
 go run -tags webview2 ./cmd/webviewhello
 go run -tags grudemo .
@@ -198,11 +198,11 @@ Contracts: [architecture/overview.md](architecture/overview.md).
 | pkgsite / `go doc` | — | [api/README.md](api/README.md) | ok |
 | CI link / doc drift checker | — | — | missing |
 
-### Private (not this package)
+### Related / private
 
 | Symbol | Status |
 |--------|--------|
-| Gru Notepad / Notes | private |
+| Gru Notepad showcase | separate repo: [shawnlondono/gru-notepad](https://github.com/shawnlondono/gru-notepad) |
 | Prism | private |
 | Studio harness / full catalog | private |
 | Foundry | private |
@@ -219,7 +219,7 @@ Contracts: [architecture/overview.md](architecture/overview.md).
 6. Do not assume WebView click-through / passthrough; occlude the HWND when overlays need hits.
 7. Do not forget `assets/fonts/` must resolve at runtime.
 8. Do not mix shell recipes casually; pick one shell ID per scene.
-9. Do not treat `@latest` as pinned; prefer `@v0.7.1` until you mean to float.
+9. Do not treat `@latest` as pinned; prefer `@v0.7.2` until you mean to float.
 10. Do not document private apps as public capabilities.
 
 ---
@@ -268,4 +268,4 @@ Still accepted later (not blockers):
 
 ---
 
-*Gru (GRU) · v0.7.1 · MPL 2.0 · LedoCorp*
+*Gru (GRU) · v0.7.2 · MPL 2.0 · LedoCorp*

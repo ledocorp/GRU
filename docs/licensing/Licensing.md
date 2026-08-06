@@ -31,9 +31,11 @@ You may use, modify, and distribute MPL-covered files per the `LICENSE`. Modific
 
 ## What is not in the public repo yet
 
+**Gru Notepad** ships as a separate MPL showcase repo: [`shawnlondono/gru-notepad`](https://github.com/shawnlondono/gru-notepad)
+(depends on this toolkit; not vendored here).
+
 These stay in the private monorepo for now (still Gru-related; **not** a second license):
 
-- Gru Notepad / Gru Notes  
 - Prism  
 - Studio / testing harness / full demo catalog / benchmarks  
 - Foundry (internal R&D)

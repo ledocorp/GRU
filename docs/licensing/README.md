@@ -11,8 +11,9 @@
 
 | Tree | Status |
 |------|--------|
-| `ui/`, inspector, `cmd/gru`, curated demos, sample app, public docs | **MPL** — public GitHub |
-| Gru Notepad, Prism, Studio testing harness, Foundry | **Private** for now (not published) |
+| `ui/`, inspector, `cmd/gru`, curated demos, sample app, public docs | **MPL** — public GitHub (`ledocorp/GRU`) |
+| Gru Notepad showcase | **MPL** — separate repo [`shawnlondono/gru-notepad`](https://github.com/shawnlondono/gru-notepad) |
+| Prism, Studio testing harness, Foundry | **Private** for now (not published) |
 
 **GoRy** is a deprecated historical name — public branding is **Gru (GRU)** only.
 
