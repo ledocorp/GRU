@@ -5,7 +5,7 @@ This file aggregates copyright and license notices for third-party components
 included in or required by Gru public binary distributions (build tags
 `grudemo` / `grudemo,webview2`).
 
-Gru-authored source is licensed under the Mozilla Public License 2.0 — see the
+Gru-authored source is licensed under the GNU General Public License v3.0 — see the
 root LICENSE file.
 
 Copyright (c) Shawn Londono and LedoCorp.
@@ -25,7 +25,7 @@ Gru platform source
 
 Copyright (c) Shawn Londono and LedoCorp
 
-Licensed under the Mozilla Public License 2.0 (MPL 2.0).
+Licensed under the GNU General Public License v3.0 (GPLv3).
 See LICENSE in this directory or repository root.
 
 Product name: **Gru (GRU)**. Historical monorepo label “GoRy” is deprecated.

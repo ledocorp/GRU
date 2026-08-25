@@ -113,4 +113,4 @@ Full reference: [CLI.md](CLI.md). Prefer explicit product names (`hello` / `webv
 - [BUILD.md](BUILD.md) — tags, smoke checklist  
 - [architecture/README.md](architecture/README.md) — system chapters  
 - [widgets/README.md](widgets/README.md) · [api/README.md](api/README.md)  
-- Root `LICENSE` (MPL 2.0) + `NOTICE`
+- Root `LICENSE` (GPLv3) + `NOTICE`

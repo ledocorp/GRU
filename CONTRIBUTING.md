@@ -6,11 +6,11 @@ Thank you for your interest in Gru.
 
 **This repository does not accept pull requests.**
 
-The project is maintainer-led. The public tree is published for use under **MPL 2.0**, not as a PR-driven community merge target. See [docs/licensing/Governance.md](docs/licensing/Governance.md).
+The project is maintainer-led. The public tree is published for use under **GPLv3**, not as a PR-driven community merge target. See [docs/licensing/Governance.md](docs/licensing/Governance.md).
 
 You are welcome to:
 
-- **Fork** and build on Gru under the MPL  
+- **Fork** and build on Gru under the GPLv3  
 - **Open issues** for bugs or clear documentation gaps (if Issues are enabled on the public repo)  
 - **Use the demos and docs** to learn the toolkit  
 
@@ -20,14 +20,16 @@ External work that is useful may still be referenced or adapted by the maintaine
 
 Prefer consuming Gru as a **Go module** dependency and building your own application (see the [README](README.md) and [Getting Started](docs/GETTING_STARTED.md)). Packaging helpers ship under `cmd/gru`.
 
+Apps that distribute binaries linking Gru must comply with GPLv3 unless they hold a commercial license from LedoCorp (when offered).
+
 ## Non-code help
 
 Clear bug reports (steps, OS, build tags) and documentation corrections remain useful even without PRs.
 
 ## License
 
-Contributions that are deliberately sent to the maintainer outside GitHub PRs are expected to be licensable under **MPL 2.0** unless otherwise agreed in writing.
+Contributions that are deliberately sent to the maintainer outside GitHub PRs are expected to be licensable under **GPLv3** unless otherwise agreed in writing.
 
 ---
 
-*Gru — MPL 2.0*
+*Gru — GPLv3*

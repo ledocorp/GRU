@@ -1,22 +1,16 @@
 # Contributing to Gru
 
-Canonical GitHub community file: repository root [`CONTRIBUTING.md`](../../CONTRIBUTING.md).
-
-This folder copy stays for docs navigation; keep it aligned with the root file.
-
----
-
 Thank you for your interest in Gru.
 
 ## Pull requests
 
 **This repository does not accept pull requests.**
 
-The project is maintainer-led. The public tree is published for use under **MPL 2.0**, not as a PR-driven community merge target. See [Governance.md](Governance.md).
+Gru is **BDFL** / maintainer-led (Shawn Londono / LedoCorp). The public tree is published for use under **GPLv3**, not as a PR-driven community merge target. See [Governance.md](Governance.md).
 
 You are welcome to:
 
-- **Fork** and build on Gru under the MPL  
+- **Fork** and build on Gru under the GPLv3  
 - **Open issues** for bugs or clear documentation gaps (if Issues are enabled on the public repo)  
 - **Use the demos and docs** to learn the toolkit  
 
@@ -24,7 +18,9 @@ External work that is useful may still be referenced or adapted by the maintaine
 
 ## Using Gru in your app
 
-Prefer consuming Gru as a **Go module** dependency and building your own application (see the public README and Getting Started guide). Packaging helpers ship under `cmd/gru`.
+Prefer consuming Gru as a **Go module** dependency and building your own application (see the public README and Getting Started guide when published). Packaging / release helpers may ship under `cmd/gru` as they mature.
+
+Apps that distribute binaries linking Gru must comply with GPLv3 unless they hold a commercial license from LedoCorp (when offered).
 
 ## Non-code help
 
@@ -32,8 +28,8 @@ Clear bug reports (steps, OS, build tags) and documentation corrections remain u
 
 ## License
 
-Contributions that are deliberately sent to the maintainer outside GitHub PRs are expected to be licensable under **MPL 2.0** unless otherwise agreed in writing.
+Contributions that are deliberately sent to the maintainer outside GitHub PRs are expected to be licensable under **GPLv3** unless otherwise agreed in writing.
 
 ---
 
-*Gru — MPL 2.0*
+*Gru — GPLv3 · BDFL*

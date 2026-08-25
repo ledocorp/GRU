@@ -1,10 +1,10 @@
 # Gru
 
-**Version:** [0.7.2](https://github.com/ledocorp/GRU/releases/tag/v0.7.2)
+**Version:** [0.8.0](https://github.com/ledocorp/GRU/releases/tag/v0.8.0) 
 
 **Gru (GRU)** is a Go-first UI toolkit (retained-mode, Raylib-backed) for building desktop applications.
 
-**License:** [Mozilla Public License 2.0](LICENSE)  
+**License:** [GNU GPLv3](LICENSE) · **BDFL** (no public PRs) · version **0.8.0**  
 **Third-party notices:** [NOTICE](NOTICE)  
 **Copyright:** Shawn Londono and LedoCorp  
 **Publisher:** [LedoCorp](https://ledocorp.org) · **Maintainer:** Shawn Londono
@@ -42,7 +42,7 @@ Commercial dual-licensing may come later; it is **not** part of this release.
 ## Module
 
 ```bash
-go get github.com/ledocorp/gru@v0.7.2
+go get github.com/ledocorp/gru@v0.8.0
 ```
 
 ```go
@@ -132,4 +132,4 @@ Report security issues per [SECURITY.md](SECURITY.md).
 
 ---
 
-*Gru (GRU) — Copyright Shawn Londono and LedoCorp — MPL 2.0*
+*Gru (GRU) — Copyright Shawn Londono and LedoCorp — GPLv3 · BDFL · 0.8.0*

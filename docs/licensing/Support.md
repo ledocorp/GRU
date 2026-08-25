@@ -4,7 +4,7 @@ Gru is maintained independently. Support is provided through different channels 
 
 ## Open Source Support
 
-Users of the open source version (MPL 2.0) receive community-level support:
+Users of the open source version (GPLv3) receive community-level support:
 
 - Bug reports and feature requests can be submitted through GitHub Issues.
 - Community discussions and contributions are welcomed.

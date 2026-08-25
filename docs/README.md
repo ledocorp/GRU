@@ -50,7 +50,7 @@ Architecture chapters explain *why*; API pages explain *how to call*; widgets ti
 | Doc | What you get |
 |-----|----------------|
 | [DEMO_INDEX.md](DEMO_INDEX.md) | All 40 grudemo scenes — titles, widgets, Tab navigation |
-| [licensing/](licensing/README.md) | MPL 2.0, contributing, security, third-party credits |
+| [licensing/](licensing/README.md) | GPLv3, contributing, security, third-party credits |
 
 ---
 

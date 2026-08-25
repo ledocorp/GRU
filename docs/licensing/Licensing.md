@@ -1,23 +1,24 @@
 # Gru Licensing
 
-**Status:** Active — MPL only  
-**Product:** **Gru (GRU)** — Go UI toolkit  
-**Organization:** [LedoCorp](https://ledocorp.org)  
+**Status:** Active — GPLv3 · BDFL  
+**Product:** **Gru (GRU)** — Go UI toolkit · **Version line:** **0.8.x**  
+**Organization:** [LedoCorp](../LEDOCORP.md)  
 **Author / maintainer:** Shawn Londono  
 
-Gru platform source that we publish is licensed under the **Mozilla Public License 2.0** (root `LICENSE`).
+Gru platform source that we publish is licensed under the **GNU General Public License v3.0** (root `LICENSE`). Gru Notepad (separate showcase repo) is also GPLv3.
 
-## Ownership
+## Ownership & governance
 
 | | |
 |--|--|
 | **Copyright** | Copyright (c) Shawn Londono and LedoCorp |
 | **Publisher** | LedoCorp |
 | **Primary maintainer** | Shawn Londono |
+| **Model** | **BDFL** — no public PR merge program |
 
-LedoCorp publishes Gru; Shawn Londono is the founder and primary maintainer. The public project name is **Gru (GRU)**. The historical label **GoRy** is deprecated and must not appear in public branding.
+LedoCorp publishes Gru; Shawn Londono is the founder and BDFL. The public project name is **Gru (GRU)**. The historical label **GoRy** is deprecated and must not appear in public branding.
 
-## What MPL covers (when published)
+## What GPLv3 covers (when published)
 
 | Component | Included |
 |-----------|----------|
@@ -25,16 +26,14 @@ LedoCorp publishes Gru; Shawn Londono is the founder and primary maintainer. The
 | **Inspector** | Devtools in `ui/` |
 | **`cmd/gru`** | App build / packaging CLI |
 | **Curated demos** | Widget showcase / batch demos |
-| **Sample apps** | `cmd/hello`, `cmd/webviewhello` (not the demo catalog) |
+| **Sample app** | Minimal public app showing how to build with Gru |
+| **Gru Notepad** | Separate showcase repo — also GPLv3 |
 
-You may use, modify, and distribute MPL-covered files per the `LICENSE`. Modifications to MPL-covered **platform** files that you distribute remain under MPL 2.0.
+You may use, modify, and distribute GPLv3-covered works per the `LICENSE`. Distributing a combined program that includes Gru typically means the distributed work must comply with GPLv3 (including source obligations) unless you obtain a commercial license from LedoCorp.
 
 ## What is not in the public repo yet
 
-**Gru Notepad** ships as a separate MPL showcase repo: [`shawnlondono/gru-notepad`](https://github.com/shawnlondono/gru-notepad)
-(depends on this toolkit; not vendored here).
-
-These stay in the private monorepo for now (still Gru-related; **not** a second license):
+These stay in the private monorepo for now (still Gru-related; **not** a second open-source license):
 
 - Prism  
 - Studio / testing harness / full demo catalog / benchmarks  
@@ -42,12 +41,12 @@ These stay in the private monorepo for now (still Gru-related; **not** a second 
 
 ## Commercial / dual license
 
-**Not active** for this release. Dual-license / paid Showcase may come later; it is not part of the public tree.
+**Not active today.** Future option: GPLv3 **or** a paid LedoCorp commercial grant for proprietary distribution. See [`COMMERCIALIZATION_DEFERRED.md`](../COMMERCIALIZATION_DEFERRED.md).
 
 ## Third-party software
 
-See root [`NOTICE`](../../NOTICE) and the credits table in the repository [`README.md`](../../README.md). Maintainer checklist: [THIRD_PARTY.md](THIRD_PARTY.md).
+See root [`NOTICE`](../../NOTICE) and the credits table in [`staging/PUBLIC_README.md`](../../staging/PUBLIC_README.md). Maintainer checklist: [THIRD_PARTY.md](THIRD_PARTY.md).
 
 ---
 
-*LedoCorp / Shawn Londono — Gru (GRU) — MPL 2.0*
+*LedoCorp / Shawn Londono — Gru (GRU) — GPLv3 · BDFL · 0.8.x*

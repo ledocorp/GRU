@@ -268,4 +268,4 @@ Still accepted later (not blockers):
 
 ---
 
-*Gru (GRU) · v0.7.2 · MPL 2.0 · LedoCorp*
+*Gru (GRU) · v0.7.2 · GPLv3 · LedoCorp*
