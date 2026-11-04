@@ -872,6 +872,16 @@ func drawChildrenInRectClip(parent Node, clip rl.Rectangle, children []Node) {
 		drawChildrenWithScissorRestore(parent, children)
 		return
 	}
+	// AndroidGLES: beginScissorMode is a no-op (FBO Y flip); draw unclipped.
+	if AndroidGLES() {
+		for _, ch := range children {
+			if ch.IsHidden() {
+				continue
+			}
+			ch.Draw()
+		}
+		return
+	}
 	beginScissorFromRect(clip)
 	setActiveDrawClip(clip)
 	for _, ch := range children {

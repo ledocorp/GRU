@@ -33,9 +33,9 @@ func appInitWindowFlags() uint32 {
 
 func appInitWindowSize() (w, h int32) {
 	if isAndroidApp() {
-		// Hint portrait before EGL init (manifest also locks portrait).
-		// Raylib replaces these with ANativeWindow dimensions after InitWindow.
-		return 1080, 1920
+		// 0×0 → SetupFramebuffer copies ANativeWindow size (full display).
+		// A fixed 1080×1920 hint letterboxes on 1080×2400 AVDs and shrinks UI.
+		return 0, 0
 	}
 	return initWindowW, initWindowH
 }

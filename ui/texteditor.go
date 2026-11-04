@@ -204,7 +204,7 @@ func (ed *TextEditor) RestartCaretCycle() {
 }
 
 func (ed *TextEditor) caretShown() bool {
-	if ed.Disabled || !ed.keyboardActive() || !rl.IsWindowFocused() {
+	if ed.Disabled || !ed.keyboardActive() || !PlatformWindowFocused() {
 		return false
 	}
 	return ed.caretPhase == caretPhaseBlink || ed.caretPhase == caretPhaseFrozen
@@ -216,7 +216,7 @@ func (ed *TextEditor) hideCaret() {
 }
 
 func (ed *TextEditor) updateCaretTimeline(dt float32) {
-	if !ed.keyboardActive() || !rl.IsWindowFocused() {
+	if !ed.keyboardActive() || !PlatformWindowFocused() {
 		ed.hideCaret()
 		return
 	}
@@ -936,7 +936,7 @@ func (ed *TextEditor) Update(dt float32) {
 	if ed.hovered != ed.lastHovered {
 		ed.lastHovered = ed.hovered
 	}
-	winFocused := rl.IsWindowFocused()
+	winFocused := PlatformWindowFocused()
 	if !winFocused {
 		ed.hideCaret()
 	} else if !ed.lastWindowFocused && ed.focused {
@@ -1122,7 +1122,7 @@ func (ed *TextEditor) Update(dt float32) {
 			}
 			ed.moveHome(true)
 		}
-	} else if keyFired(rl.KeyEnter) {
+	} else if keyFired(rl.KeyEnter) || IMEKeyPressed(int32(rl.KeyEnter)) {
 		ed.insertAtCursor("\n")
 	} else if keyFired(rl.KeyTab) {
 		ed.insertAtCursor("    ")
@@ -1144,7 +1144,12 @@ func (ed *TextEditor) Update(dt float32) {
 		)
 	}
 
-	char := rl.GetCharPressed()
+	if IMEKeyPressed(int32(rl.KeyBackspace)) {
+		if !ed.deleteSelection() {
+			ed.deleteBeforeCursor()
+		}
+	}
+	char := CharPressedOrIME()
 	for char != 0 {
 		if char >= 32 || char == '\t' {
 			if char == ' ' {
@@ -1159,13 +1164,13 @@ func (ed *TextEditor) Update(dt float32) {
 						ed.ID(), ed.focused, before, ed.cursor, len(textBefore), len(ed.Text.Get()), tailBytes(ed.Text.Get(), 12),
 					)
 				}
-				char = rl.GetCharPressed()
+				char = CharPressedOrIME()
 				continue
 			}
 			ed.clearSelection()
-			ed.insertAtCursor(string(char))
+			ed.insertAtCursor(string(rune(char)))
 		}
-		char = rl.GetCharPressed()
+		char = CharPressedOrIME()
 	}
 	ed.flushContentDirty()
 }
@@ -1533,6 +1538,17 @@ func (ed *TextEditor) drawCaret(drawStyle Style, layoutBounds rl.Rectangle, pad 
 	cursorY := int32(baseY + float32(vLine)*lh)
 	fs := int32(EffectiveFontSize(drawStyle))
 	rl.DrawLine(cursorX, cursorY, cursorX, cursorY+fs, ed.caretInkColor())
+}
+
+// InvalidateAutoHeightMeasure forces a height remeasure on the next Layout pass
+// (clears wrap cache + last inner width so AutoHeight remounts correctly).
+func (ed *TextEditor) InvalidateAutoHeightMeasure() {
+	if ed == nil {
+		return
+	}
+	ed.invalidateDisplayLinesCache()
+	ed.lastInnerW = 0
+	ed.MarkDirty()
 }
 
 // SetWordWrap enables soft line wrapping to the editor inner width.

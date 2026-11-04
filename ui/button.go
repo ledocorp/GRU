@@ -309,6 +309,12 @@ const controlRoundSegments = 12
 
 // drawRoundedControl paints a smooth filled rounded rect (no border stroke).
 func drawRoundedControl(rect rl.Rectangle, w, h, cornerRadius float32, fill rl.Color) {
+	// DrawRectangleRounded triangulates poorly / no-ops on some Android GLES
+	// drivers; seam-safe path matches Card/Panel fills.
+	if AndroidGLES() || cornerRadius <= 0 {
+		drawSeamSafeRoundedFill(rect, cornerRadius, fill)
+		return
+	}
 	roundness := buttonCornerRoundness(w, h, cornerRadius)
 	if roundness <= 0 {
 		rl.DrawRectangleRec(rect, fill)

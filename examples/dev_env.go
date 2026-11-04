@@ -31,7 +31,7 @@ func StartupOpenFilePath() string {
 
 // ResolveStartupSceneIndex picks the scene index for main.go startup.
 // When GRU_SCENE (or GORY_SCENE alias) is set, the first factory whose Title() matches wins.
-// On Android, defaults to Notepad when unset.
+// On Android (non-notepad builds), defaults to App Shell when unset.
 func ResolveStartupSceneIndex(factories []func() Scene, defaultIndex int) int {
 	title := DevSceneTitle()
 	if title == "" {

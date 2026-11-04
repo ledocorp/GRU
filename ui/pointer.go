@@ -75,6 +75,19 @@ func PreparePointerInput() {
 	down := rl.IsMouseButtonDown(rl.MouseLeftButton)
 	pressed := rl.IsMouseButtonPressed(rl.MouseLeftButton)
 
+	// Android: also sample touch[0]. Mouse and touch stay in sync in raylib, but
+	// a frame where only Touch.pointCount flipped still needs a latch.
+	if AndroidGLES() && rl.GetTouchPointCount() > 0 {
+		tp := rl.GetTouchPosition(0)
+		if tp.X > 0 || tp.Y > 0 {
+			mouse = tp
+		}
+		down = true
+		if !ptrLeftWasDown {
+			pressed = true
+		}
+	}
+
 	if pressed || (!ptrLeftWasDown && down) {
 		latchPointerClick(mouse)
 	}

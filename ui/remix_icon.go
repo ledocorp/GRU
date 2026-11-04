@@ -32,6 +32,7 @@ var phosphorToRemix = map[string]string{
 	PhosphorHouse:           "home",
 	PhosphorMagnifyingGlass: "search",
 	PhosphorGear:            "settings",
+	PhosphorUser:            "user",
 	PhosphorUsers:           "team",
 	PhosphorEnvelope:        "mail",
 	PhosphorTray:            "inbox",
@@ -198,6 +199,9 @@ func remixWarmCodepoints(classes map[string]rune) []int32 {
 	// direct CP rasterization is flaky in a 4-glyph atlas.
 	for _, name := range []string{
 		PhosphorX, PhosphorMinus, PhosphorSquare, PhosphorCopy, PhosphorResize,
+		// App Shell / phone chrome — keep in the lean atlas (IconsEagerWarm is off on Android).
+		PhosphorHouse, PhosphorMagnifyingGlass, PhosphorUser, PhosphorPlus,
+		PhosphorList, PhosphorDotsThree,
 	} {
 		add(name, PhosphorRegular)
 		add(name, PhosphorFill)
@@ -261,7 +265,11 @@ func (r *remixIconRegistry) loadSubsetLocked(cps []int32) bool {
 	if prevReady && prev.Texture.ID != 0 {
 		rl.UnloadFont(prev)
 	}
-	rl.GenTextureMipmaps(&font.Texture)
+	// Mipmaps on oversized / GLES-failed atlases log GL 0x502 every frame on the
+	// Android emulator; bilinear alone is enough for icon draws at ≤64px.
+	if !AndroidGLES() {
+		rl.GenTextureMipmaps(&font.Texture)
+	}
 	rl.SetTextureFilter(font.Texture, rl.FilterBilinear)
 	r.font = font
 	r.loadedCP = loaded
@@ -310,26 +318,52 @@ func remixHasGlyph(phosphorName string, weight PhosphorWeight) bool {
 }
 
 func remixEnsureGlyph(phosphorName string, weight PhosphorWeight) bool {
+	return remixEnsureGlyphsMany([]string{phosphorName}, weight)
+}
+
+// remixEnsureGlyphsMany packs every named glyph into the Remix atlas in one rebuild.
+func remixEnsureGlyphsMany(names []string, weight PhosphorWeight) bool {
+	if len(names) == 0 {
+		return true
+	}
 	remixIcons.mu.Lock()
 	defer remixIcons.mu.Unlock()
 	if remixIcons.failed || len(remixIcons.cssClasses) == 0 {
 		return false
 	}
-	cp, ok := remixCodepointFor(phosphorName, weight, remixIcons.cssClasses)
-	if !ok {
+	needSet := make(map[int32]struct{}, len(remixIcons.loadedCP)+len(names))
+	for k := range remixIcons.loadedCP {
+		needSet[k] = struct{}{}
+	}
+	added := false
+	okAny := false
+	for _, name := range names {
+		cp, ok := remixCodepointFor(name, weight, remixIcons.cssClasses)
+		if !ok {
+			continue
+		}
+		okAny = true
+		icp := int32(cp)
+		if _, has := needSet[icp]; has && remixIcons.ready {
+			continue
+		}
+		if _, has := remixIcons.loadedCP[icp]; !has || !remixIcons.ready {
+			added = true
+		}
+		needSet[icp] = struct{}{}
+	}
+	if !okAny {
 		return false
 	}
-	icp := int32(cp)
-	if _, has := remixIcons.loadedCP[icp]; has && remixIcons.ready {
+	if !added && remixIcons.ready {
 		return true
 	}
 	iconWarmPending.Store(true)
 	defer iconWarmPending.Store(false)
-	need := make([]int32, 0, len(remixIcons.loadedCP)+1)
-	for k := range remixIcons.loadedCP {
+	need := make([]int32, 0, len(needSet))
+	for k := range needSet {
 		need = append(need, k)
 	}
-	need = append(need, icp)
 	sort.Slice(need, func(i, j int) bool { return need[i] < need[j] })
 	need = filterIconFontCodepoints(need)
 	if !remixIcons.loadSubsetLocked(need) {

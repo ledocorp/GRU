@@ -429,16 +429,32 @@ func (ib *IconButton) drawContent() {
 
 // drawStackedRibbonCell lays out icon + caption inside a ribbon cell with even inner padding.
 func (ib *IconButton) drawStackedRibbonCell(style Style, cell rl.Rectangle, label string, hasPhosphor, hasVecIcon, hasTexIcon, hasSymIcon bool) {
-	const innerPad = float32(7)
+	innerPad := float32(7)
 	capStyle := style
 	capStyle.FontSize = tbRibbonCaptionFS
+	if AndroidGLES() {
+		// Tight dp pad; rem-cancel caption like BottomNav labels.
+		innerPad = Dp(3)
+		ref := TypeScaleReference
+		if ref < 1 {
+			ref = 16
+		}
+		capStyle.FontSize = int32(Dp(PhoneRibbonCaptionDp)*ref/RootFontSize + 0.5)
+		if capStyle.FontSize < 1 {
+			capStyle.FontSize = 1
+		}
+	}
 	labelH := EffectiveFontSize(capStyle)
 	textTop := cell.Y + cell.Height - innerPad - labelH
 	iconAreaH := textTop - cell.Y - innerPad
 	if iconAreaH < 10 {
 		iconAreaH = 10
 	}
-	iconSize := phosphorIconSize(iconAreaH, 22)
+	iconFloor := float32(22)
+	if AndroidGLES() {
+		iconFloor = Dp(22)
+	}
+	iconSize := phosphorIconSize(iconAreaH, int32(iconFloor+0.5))
 	if iconSize > cell.Width-2*innerPad {
 		iconSize = cell.Width - 2*innerPad
 	}

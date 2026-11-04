@@ -527,6 +527,18 @@ func (m *MarkdownView) Update(dt float32) {
 	m.applyPendingScroll()
 }
 
+// EnsureAboveFoldBuilt synchronously mounts the above-fold preview slice so the
+// pane is usable immediately after SetMarkdown / note switch.
+func (m *MarkdownView) EnsureAboveFoldBuilt() {
+	if m == nil {
+		return
+	}
+	if !m.aboveFoldDone {
+		m.buildAboveFold()
+		m.RelayoutAfterContentChange()
+	}
+}
+
 // EnsureFullyBuilt completes any incremental block build synchronously.
 // Notepad uses this after Open so the preview never shows a half-built document.
 func (m *MarkdownView) EnsureFullyBuilt() {

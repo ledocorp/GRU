@@ -108,26 +108,85 @@ func (bn *BottomNavigationBar) Update(_ float32) {
 		return
 	}
 	mouse := rl.GetMousePosition()
+	// Prefer latched click position on Android — GetMousePosition can lag a frame
+	// behind the press used by PointerClickConsume.
+	hitAt := mouse
+	if PointerClickPending() {
+		hitAt = PointerClickPosition()
+	}
 	bn.hoverIdx = -1
+	hitRect := bn.androidHitBounds()
+	n := len(bn.Items)
+	segW := float32(0)
+	if n > 0 && hitRect.Width > 0 {
+		segW = hitRect.Width / float32(n)
+	}
 	for i := range bn.Items {
-		if rl.CheckCollisionPointRec(mouse, bn.itemBounds(i)) {
+		seg := rl.NewRectangle(hitRect.X+float32(i)*segW, hitRect.Y, segW, hitRect.Height)
+		if rl.CheckCollisionPointRec(hitAt, seg) {
 			bn.hoverIdx = i
 			break
 		}
 	}
-	if bn.hoverIdx < 0 || !PointerClickConsume(bn.itemBounds(bn.hoverIdx)) {
+	if bn.hoverIdx < 0 {
+		if AndroidGLES() && PointerClickPending() {
+			b := bn.Bounds()
+			rl.TraceLog(rl.LogWarning, "bottomnav miss: hit=(%.0f,%.0f) bounds=(%.0f,%.0f %.0fx%.0f) hitBand=(%.0f,%.0f %.0fx%.0f) hover=%d",
+				hitAt.X, hitAt.Y, b.X, b.Y, b.Width, b.Height,
+				hitRect.X, hitRect.Y, hitRect.Width, hitRect.Height, bn.hoverIdx)
+		}
 		return
+	}
+	seg := rl.NewRectangle(hitRect.X+float32(bn.hoverIdx)*segW, hitRect.Y, segW, hitRect.Height)
+	if !PointerClickConsume(seg) {
+		return
+	}
+	if AndroidGLES() {
+		rl.TraceLog(rl.LogWarning, "bottomnav hit idx=%d", bn.hoverIdx)
 	}
 	prev := bn.Selected.Get()
 	if prev != bn.hoverIdx {
 		bn.Selected.Set(bn.hoverIdx)
 	}
-	if bn.OnChange != nil && (bn.MenuMode || prev != bn.hoverIdx) {
+	changed := bn.MenuMode || prev != bn.hoverIdx
+	if bn.OnChange != nil && changed {
 		bn.OnChange(bn.hoverIdx)
+	}
+	if AndroidGLES() && changed {
+		PlatformHapticTick()
 	}
 }
 
+// androidHitBounds returns the tap target for BottomNav.
+// When the content band is correct, Bounds() already match the visual footer.
+// A small pad below the bar covers gesture-inset adb taps only.
+func (bn *BottomNavigationBar) androidHitBounds() rl.Rectangle {
+	b := bn.Bounds()
+	if !AndroidGLES() {
+		return b
+	}
+	h := b.Height
+	if h < 1 {
+		h = bn.barHeight()
+	}
+	w := b.Width
+	if w < 1 {
+		w = float32(rl.GetScreenWidth())
+	}
+	// Gesture / adb taps often land a few px below the GL content bottom.
+	pad := Dp(48)
+	return rl.NewRectangle(b.X, b.Y, w, h+pad)
+}
+
 func (bn *BottomNavigationBar) barHeight() float32 {
+	if AndroidGLES() {
+		// Compact labeled bar in dp (docs/ANDROID_DENSITY.md) — not Material 80dp.
+		h := Dp(PhoneBottomNavHDp)
+		if bn.Compact {
+			return h * 0.85
+		}
+		return h
+	}
 	if bn.Compact {
 		return bottomNavCompactH
 	}
@@ -135,6 +194,13 @@ func (bn *BottomNavigationBar) barHeight() float32 {
 }
 
 func (bn *BottomNavigationBar) iconSize() float32 {
+	if AndroidGLES() {
+		sz := Dp(PhoneBottomNavIconDp)
+		if bn.Compact {
+			return sz * 0.9
+		}
+		return sz
+	}
 	if bn.Compact {
 		return bottomNavCompactIcon
 	}
@@ -219,6 +285,14 @@ func (bn *BottomNavigationBar) drawInternal() {
 		var iconY float32
 		if bn.iconsOnly() {
 			iconY = seg.Y + (seg.Height-iconSz)/2
+		} else if AndroidGLES() {
+			// Pack icon+label tightly and center in the bar (avoid empty chrome).
+			labelFS := Dp(PhoneBottomNavLabelDp)
+			cluster := iconSz + bottomNavLabelGap + labelFS
+			iconY = seg.Y + (seg.Height-cluster)/2
+			if iconY < seg.Y+2 {
+				iconY = seg.Y + 2
+			}
 		} else {
 			iconY = seg.Y + bottomNavIconTop
 		}
@@ -233,11 +307,12 @@ func (bn *BottomNavigationBar) drawInternal() {
 			if wt == "" {
 				wt = PhosphorRegular
 			}
-			Phosphor.EnsureLoaded(item.Phosphor, wt)
-			if !Phosphor.Draw(iconDst, item.Phosphor, wt, iconColor) && item.Icon != "" {
+			// DrawIcon warms Remix and falls back to phosphorTextFallback (⌂ ⌕ 👤)
+			// when the TTF/CSS pair lacks a glyph — common on lean Android atlases.
+			if !DrawIcon(iconDst, item.Phosphor, wt, iconColor) && item.Icon != "" {
 				fallback := baseStyle
 				fallback.TextColor = iconColor
-				fallback.FontSize = int32(bottomNavIconSize)
+				fallback.FontSize = int32(iconSz)
 				iw := measureTextS(item.Icon, fallback)
 				drawTextS(item.Icon, int32(seg.X+(seg.Width-float32(iw))/2), int32(iconY), fallback)
 			}
@@ -255,9 +330,20 @@ func (bn *BottomNavigationBar) drawInternal() {
 				labelStyle.TextColor = rl.NewColor(79, 70, 229, 255)
 				labelStyle.Bold = true
 			}
+			if AndroidGLES() {
+				// Cancel rem inflation so labels stay ~11dp, not rem×theme.
+				ref := TypeScaleReference
+				if ref < 1 {
+					ref = 18
+				}
+				labelStyle.FontSize = int32(Dp(PhoneBottomNavLabelDp)*ref/RootFontSize + 0.5)
+				if labelStyle.FontSize < 1 {
+					labelStyle.FontSize = 1
+				}
+			}
 			labelFS := EffectiveFontSize(labelStyle)
 			labelBandY := iconY + iconSz + bottomNavLabelGap
-			labelBandH := seg.Y + seg.Height - labelBandY - 6
+			labelBandH := seg.Y + seg.Height - labelBandY - 4
 			if labelBandH < labelFS {
 				labelBandH = labelFS
 			}

@@ -97,25 +97,27 @@ func (f *FAB) margin() float32 {
 	if f.Margin > 0 {
 		return f.Margin
 	}
-	return fabMargin
+	return fabMargin * PhoneChromeScale()
 }
 
 func (f *FAB) desiredSize() (w, h float32) {
+	scale := PhoneChromeScale()
+	mini := fabMiniDiameter * scale
 	if f.Label == "" {
-		return fabMiniDiameter, fabMiniDiameter
+		return mini, mini
 	}
 	style := f.GetStyle()
 	labelW := float32(measureTextS(f.Label, style))
 	iconW := float32(measureTextS(f.Icon, style))
-	pad := float32(20)
+	pad := float32(20) * scale
 	if style.Padding > 0 {
-		pad = style.Padding
+		pad = style.Padding * scale
 	}
-	w = pad*2 + iconW + labelW + 12
-	if w < fabMiniDiameter {
-		w = fabMiniDiameter
+	w = pad*2 + iconW + labelW + 12*scale
+	if w < mini {
+		w = mini
 	}
-	return w, fabExtendedHeight
+	return w, fabExtendedHeight * scale
 }
 
 // Layout pins the FAB to the anchor's bottom-right corner.
@@ -186,7 +188,7 @@ func (f *FAB) drawInternal() {
 		drawFABShadow(cx, cy, r)
 		rl.DrawCircleV(rl.NewVector2(cx, cy), r, bg)
 		iconStyle := style
-		iconSize := fabMiniIconSize
+		iconSize := fabMiniIconSize * PhoneChromeScale()
 		if iconSize > rect.Width-12 {
 			iconSize = rect.Width - 12
 		}

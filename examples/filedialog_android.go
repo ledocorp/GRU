@@ -1,46 +1,84 @@
 //go:build android
 
-// Package examples — Android file dialog stubs (Phase A5 / §9).
-//
-// Android-only file (//go:build android). Desktop uses filedialog_desktop.go.
-// v1: toast stub; SAF later. See docs/ANDROID_CODE.md §3 and ANDROID_PHASE.md.
+// Package examples — Android SAF file dialogs (M4). Async so NativeActivity
+// does not ANR while DocumentsUI is open.
 package examples
 
 import (
-	"github.com/ledocorp/gru/ui"
+	"errors"
 	"time"
+
+	"github.com/ledocorp/gru/ui"
 )
 
-func androidFileDialogStub(action string) (string, error) {
-	ui.ShowToast(action+" is not available on Android yet — use New or paste text",
-		ui.ToastInfo, 3*time.Second)
-	return "", ErrFileDialogUnavailable
+func mapFilePickErr(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, ui.ErrFilePickCancelled()) {
+		return ErrFileDialogCancelled
+	}
+	return err
 }
 
-// PickPlanJSONOpen is a stub on Android until SAF or in-app picker lands.
+// StartTextFileOpen launches ACTION_OPEN_DOCUMENT. onDone may run off the
+// game loop — queue scene work with Document.QueueMain.
+func StartTextFileOpen(onDone func(path string, err error)) {
+	ui.PlatformStartTextFileOpen(func(path string, err error) {
+		if onDone != nil {
+			onDone(path, mapFilePickErr(err))
+		}
+	})
+}
+
+// StartTextFileSave launches ACTION_CREATE_DOCUMENT with initial content.
+func StartTextFileSave(defaultName string, content []byte, onDone func(path string, err error)) {
+	if defaultName == "" {
+		defaultName = "Untitled.txt"
+	}
+	ui.PlatformStartTextFileSave(defaultName, content, func(path string, err error) {
+		if onDone != nil {
+			onDone(path, mapFilePickErr(err))
+		}
+	})
+}
+
+// PickPlanJSONOpen opens any text-like document via SAF (sync; avoid from game loop).
 func PickPlanJSONOpen() (string, error) {
-	return androidFileDialogStub("Open plan JSON")
+	return PickTextFileOpen()
 }
 
-// PickTextFileOpen is a stub on Android until SAF or in-app picker lands.
+// PickTextFileOpen is sync; prefer StartTextFileOpen from the game loop.
 func PickTextFileOpen() (string, error) {
-	return androidFileDialogStub("Open")
+	path, err := ui.PlatformPickTextFileOpen()
+	return path, mapFilePickErr(err)
 }
 
-// PickTextFileSave is a stub on Android until SAF or in-app picker lands.
+// PickTextFileSave is sync; prefer StartTextFileSave from the game loop.
 func PickTextFileSave(defaultName string) (string, error) {
-	_ = defaultName
-	return androidFileDialogStub("Save As")
+	return PickTextFileSaveWith(defaultName, nil)
 }
 
-// PickHTMLReportSave is a stub on Android until SAF or in-app picker lands.
+// PickTextFileSaveWith is sync; prefer StartTextFileSave from the game loop.
+func PickTextFileSaveWith(defaultName string, content []byte) (string, error) {
+	if defaultName == "" {
+		defaultName = "Untitled.txt"
+	}
+	path, err := ui.PlatformPickTextFileSave(defaultName, content)
+	return path, mapFilePickErr(err)
+}
+
+// PickHTMLReportSave uses the same SAF create path as text save.
 func PickHTMLReportSave(defaultName string) (string, error) {
-	_ = defaultName
-	return androidFileDialogStub("Export plan report")
+	if defaultName == "" {
+		defaultName = "report.html"
+	}
+	return PickTextFileSaveWith(defaultName, nil)
 }
 
-// PickPNGSave is a stub on Android until SAF or in-app picker lands.
+// PickPNGSave is not wired to an image encoder on Android yet.
 func PickPNGSave(defaultName string) (string, error) {
 	_ = defaultName
-	return androidFileDialogStub("Export graph PNG")
+	ui.ShowToast("PNG export is not available on Android yet", ui.ToastInfo, 3*time.Second)
+	return "", ErrFileDialogUnavailable
 }

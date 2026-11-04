@@ -32,6 +32,28 @@ func MountBorderlessDocument(doc *Document, fullW, fullH int32) {
 	doc.InvalidatePaint()
 }
 
+// MountFullscreenDocument mounts a scene without desktop title-bar chrome.
+// Resize + settle so AutoHeight text/buttons get real bounds.
+// Android: preserves system-bar insets already applied via ApplyAndroidSafeInsets;
+// do not zero ChromeTop or content jumps under the status bar.
+func MountFullscreenDocument(doc *Document, fullW, fullH int32) {
+	if doc == nil {
+		return
+	}
+	if !AndroidGLES() {
+		doc.SetChromeTop(0)
+	}
+	if fullW < 1 {
+		fullW = 360
+	}
+	if fullH < 1 {
+		fullH = 640
+	}
+	doc.Resize(fullW, fullH)
+	SettleDocumentMount(doc)
+	doc.InvalidatePaint()
+}
+
 // ResizeBorderlessDocument updates layout for a client size change (Studio resize path).
 // Does not re-run mount settle passes — those belong in MountBorderlessDocument only.
 func ResizeBorderlessDocument(doc *Document, fullW, fullH int32) {

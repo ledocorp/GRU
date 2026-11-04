@@ -46,15 +46,32 @@ func scaleAtlasPx(base int32) int32 {
 func EffectiveSDFAtlasSize() int32 { return scaleAtlasPx(SDFAtlasBasePx) }
 
 // EffectiveRemixAtlasSize returns the Remix icon-font atlas size for the current DPI.
-func EffectiveRemixAtlasSize() int32 { return scaleAtlasPx(RemixAtlasBasePx) }
+// Android GLES emulators often cap textures at 4096² — a 1280px glyph size with a
+// growing codepoint set overflows GenImageFontAtlas (black FAB / missing chrome icons).
+func EffectiveRemixAtlasSize() int32 {
+	if AndroidGLES() {
+		// 320: enough for shell chrome (home/search/user/add) without exceeding
+		// emulator max_texture_size when the warm set grows (was 1280→GL errors).
+		return 320
+	}
+	return scaleAtlasPx(RemixAtlasBasePx)
+}
 
 // EffectiveBitmapFontAtlasSize returns the bitmap UI font fallback atlas size.
-func EffectiveBitmapFontAtlasSize() int32 { return scaleAtlasPx(BitmapFontBasePx) }
+// Android skips SDF; baking near ~2× peak rem size keeps bilinear scale mild
+// (a 440px atlas drawn at ~45px looks soft/mushy on GLES).
+func EffectiveBitmapFontAtlasSize() int32 {
+	if AndroidGLES() {
+		return 112
+	}
+	return scaleAtlasPx(BitmapFontBasePx)
+}
 
 // InitDisplayAwareAtlases loads bitmap, Remix, and SDF atlases scaled by [DisplayScale].
 // Call after [RefreshDisplayScale] and rl.InitWindow.
 func InitDisplayAwareAtlases() {
 	RefreshDisplayScale()
+	RefreshDensity()
 	atlasForDisplayScale = DisplayScale
 	InitFonts(EffectiveBitmapFontAtlasSize())
 	InitIcons(EffectiveRemixAtlasSize())
@@ -95,6 +112,7 @@ func reinitDisplayAwareAtlases() {
 func ReinitDisplayAwareAtlasesIfNeeded() bool {
 	prev := atlasForDisplayScale
 	RefreshDisplayScale()
+	RefreshDensity()
 	if prev > 0 && displayScaleNearlyEqual(DisplayScale, prev) {
 		return false
 	}

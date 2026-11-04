@@ -85,7 +85,11 @@ const (
 )
 
 // demoNavBottom returns chrome reserved for the demo launcher footer, or 0 when hidden.
+// Android: hide the desktop Tab/Scenes strip — it steals height and confuses phone chrome.
 func demoNavBottom(scene examples.Scene) int32 {
+	if isAndroidApp() {
+		return 0
+	}
 	if scene != nil && scene.HideDemoNav() {
 		return 0
 	}
@@ -319,6 +323,8 @@ func runApp() {
 	rl.InitWindow(initW, initH, appInitWindowTitle())
 	appinstance.RaiseRunningInstance = platformWindowFocus
 	if isAndroidApp() {
+		// Undo raylib AWINDOW_FLAG_FULLSCREEN; request content-rect insets.
+		ui.EnsureAndroidInsetFlags()
 		windowW = int32(rl.GetScreenWidth())
 		windowH = int32(rl.GetScreenHeight())
 		windowW, windowH = appNormalizeAndroidClientSize(windowW, windowH)
@@ -359,7 +365,10 @@ func runApp() {
 	// Base sizes: 176 pt SDF/bitmap text, 512 pt Remix icons — scaled by DisplayScale
 	// (125% DPI → ~220 / ~640). SSAA stays separate; do not multiply SSAA × DPI.
 	ui.RefreshDisplayScale()
-	ui.IconsEagerWarm = true // Studio catalog needs WarmGlyphNames at first paint
+	// Type scale before atlases so Android bitmap bake tracks phone rem (M1/M2).
+	ui.RefreshTypeScaleFromWindow(windowW, windowH)
+	// Eager remix warm is heavy on GLES cold start; desktop Studio keeps it on.
+	ui.IconsEagerWarm = !isAndroidApp()
 	ui.InitDisplayAwareAtlases()
 	applyTextEngineMode()
 	defer ui.UnloadSDFFonts()
@@ -383,8 +392,10 @@ func runApp() {
 		// One stderr line for ship-gate render verification (§A.4); no idle/resize spam.
 		fmt.Fprintln(os.Stderr, notepadReleaseRenderLine())
 	}
-	// Seed RootFontSize once at startup. Resize events later keep it in sync.
-	ui.RefreshTypeScaleFromWindow(windowW, windowH)
+	if isAndroidApp() {
+		fmt.Fprintf(os.Stderr, "grudemo android: size=%dx%d dpi=%.2f rem=%.0f font=%s\n",
+			windowW, windowH, ui.DisplayScale, ui.RootFontSize, ui.UIFontBackend())
+	}
 	ui.Toasts.SetWindowSize(windowW, windowH)
 	ui.NotificationCenterMgr.SetWindowSize(windowW, windowH)
 	ui.Tooltips.SetWindowSize(windowW, windowH)
@@ -469,6 +480,8 @@ func runApp() {
 		doc.SetChromeBottom(float32(demoNavBottom(activeScene)))
 		if borderless {
 			doc.SetChromeTop(ui.TitleBarHeight)
+		} else if isAndroidApp() {
+			ui.ApplyAndroidSafeInsets(doc, float32(demoNavBottom(activeScene)), windowW, windowH)
 		}
 		activeScene.Build(doc)
 		examples.PreloadScenePhosphor(doc)
@@ -492,7 +505,10 @@ func runApp() {
 		// NeedsRedraw to skip the draw pass on clean frames (the superTarget
 		// persists and is blitted instead). In 1× fallback mode it allocates
 		// a RenderTexture2D so the same skip-and-blit logic applies.
-		doc.EnableUIRenderTexture(true)
+		// Android GLES: draw 1× direct (hello path) — skip UI RT FBOs for now.
+		if !isAndroidApp() {
+			doc.EnableUIRenderTexture(true)
+		}
 		if doc.Root != nil {
 			if doc.Root.IsDirty() {
 				doc.Root.Layout()
@@ -633,6 +649,11 @@ func runApp() {
 		fmt.Fprintln(os.Stderr, "Gru: presenting first frame (window stays hidden until ready)…")
 	}
 
+	androidSettleFrames := 0
+	if isAndroidApp() {
+		androidSettleFrames = 8 // surface size often settles a few frames after APP_CMD_INIT_WINDOW
+	}
+
 	// ── Main loop ─────────────────────────────────────────────────────────────
 	for !rl.WindowShouldClose() {
 		if androidBackPressed() && !ui.OverlayBlocksSceneInput() {
@@ -708,6 +729,19 @@ func runApp() {
 			ui.MarkWebViewHostsResize()
 			doc.ForceFullLayout()
 			doc.InvalidatePaint()
+			if isAndroidApp() {
+				androidSettleFrames = 8
+			}
+		}
+		if androidSettleFrames > 0 && doc != nil {
+			if ui.ApplyAndroidSafeInsets(doc, float32(demoNavBottom(activeScene)), windowW, windowH) {
+				doc.Resize(windowW, windowH)
+			}
+			doc.ForceFullLayout()
+			examples.FinishShellMount(doc)
+			doc.InvalidatePaint()
+			androidSettleFrames--
+			frameWake.Add(ui.WakeResize, "android-settle")
 		}
 		if rl.IsWindowReady() {
 			zoomed := rl.IsWindowMaximized()
