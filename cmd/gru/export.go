@@ -66,6 +66,8 @@ func runExport(args []string) error {
 		"ui", "media/imaging", "internal/go-webview2", "internal/appicon",
 		"internal/tray", "internal/version", "devtools/studio",
 		"cmd/hello", "samples/hello", "cmd/webviewhello", "samples/webviewhello", "cmd/gru",
+		// Linux raise helper used by examples/appinstance + platform_linux (X11).
+		"x11util",
 		// S1 / fx defaults (CGO): emit-C bodies + zspec consumer pack. Without these,
 		// public clones fail to link ui/fxglyph + ui/fxmeasure + ui/fxbridge.
 		"gen/fxlib",
