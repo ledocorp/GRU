@@ -334,8 +334,43 @@ func phosphorFontDrawSize(dst rl.Rectangle) float32 {
 	if size < minRenderPx {
 		size = minRenderPx
 	}
+	if PreferIconSharp1x() {
+		size = quantizeIconDrawSize(size)
+	}
 	return size
 }
+
+// PreferIconSharp1x enables G1.3 sticky icon sizes + point-filtered atlas at SSAA 1×.
+func PreferIconSharp1x() bool {
+	return EffectiveSupersamplingScale() <= 1.01
+}
+
+// stickyIconDrawSizes are exact client-px glyph sizes for Remix draws at SSAA 1×.
+// Keep ≤10 slots so atlas rebuilds stay bounded (mirror S1 strike budget mindset).
+var stickyIconDrawSizes = []float32{14, 16, 18, 20, 22, 24, 28, 32, 40, 48}
+
+func quantizeIconDrawSize(size float32) float32 {
+	if size <= stickyIconDrawSizes[0] {
+		return stickyIconDrawSizes[0]
+	}
+	// Stronger bias toward larger sticky slots — thin Remix strokes read weak at exact size.
+	best := stickyIconDrawSizes[len(stickyIconDrawSizes)-1]
+	bestCost := float32(1e9)
+	for _, s := range stickyIconDrawSizes {
+		var cost float32
+		if s >= size {
+			cost = (s - size) * 0.55
+		} else {
+			cost = (size - s) * 1.45
+		}
+		if cost < bestCost {
+			best = s
+			bestCost = cost
+		}
+	}
+	return best
+}
+
 
 func iconFontGlyphReadyInSet(font rl.Font, cp rune, loaded map[int32]struct{}) bool {
 	if font.Texture.ID == 0 || cp <= 0 {

@@ -64,7 +64,7 @@ func InitShapedFonts() bool {
 }
 
 func initShapedLegacyStack() bool {
-	regPath := firstExisting(fontCandidates...)
+	regPath := firstExisting(resolvedFontCandidates()...)
 	if regPath == "" {
 		return false
 	}
@@ -328,6 +328,7 @@ func unloadShapedFonts() {
 	shapedUI = shapedFaceStack{}
 	shapedPreview = shapedFaceStack{}
 	shapedDevanagari = nil
+	shapedArabic = nil
 	shapedMeasureRatioReady = false
 	shapedPreviewMeasureRatioReady = false
 	shapedMeasureCacheClear()

@@ -9,7 +9,7 @@ Capability order: window manager → TitleBar → Document chrome → render →
 ## Default window flags
 
 - `FlagWindowUndecorated` + `FlagWindowResizable` + `FlagMsaa4xHint` + `FlagVsyncHint`
-- High-DPI layout flag is typically omitted so layout pixels match the framebuffer; quality comes from **2× SSAA**
+- High-DPI layout flag is typically omitted so layout pixels match the framebuffer; quality comes from **MSAA + 1× present path** (LCD text, high-res glyphs, shape AA — see [rendering.md](rendering.md))
 - `SetWindowMinSize(MinClientWidth, …)` — **`MinClientWidth` is 480** (`ui/window_policy.go`)
 - Paint: clear + `DrawBorderlessWindowFill` (rounded page fill) + alpha blit of the UI supersample
 

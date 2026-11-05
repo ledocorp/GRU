@@ -336,19 +336,32 @@ func (b *Badge) drawInternal() {
 	var roundness float32
 	switch {
 	case useSharpQuad:
-		rl.DrawRectangleRec(bounds, bg)
+		roundness = 0
 	case b.Shape == BadgeShapeRounded:
 		roundness = 0.2
-		rl.DrawRectangleRounded(bounds, roundness, 8, bg)
-	default: // BadgeShapePill
+	default:
 		roundness = 1.0
-		rl.DrawRectangleRounded(bounds, roundness, 8, bg)
 	}
+	// Soft chips: coverage fill (Avatar family — C21). Bordered / selected use
+	// drawRoundedInsetBorder (tess on large panels; coverage punch on tiny pills
+	// so we do not stair-step like C20 strip+disc / hard tess on 24px chips).
+	borderCol := style.BorderColor
+	bw := style.BorderWidth
 	if b.Selected != nil && b.Selected.Get() {
-		inset := rl.NewRectangle(bounds.X+2, bounds.Y+2, bounds.Width-4, bounds.Height-4)
-		if inset.Width > 0 && inset.Height > 0 {
-			rl.DrawRectangleRoundedLinesEx(inset, 1.0, 8, 2, focusRingIndigo)
+		borderCol = focusRingIndigo
+		if bw < 1 {
+			bw = 1
 		}
+	}
+	if useSharpQuad {
+		rl.DrawRectangleRec(bounds, bg)
+		if bw > 0 {
+			drawRoundedInsetBorder(bounds, 0, snapChromeBorderWidth(bw), borderCol, bg)
+		}
+	} else if bw > 0 {
+		drawRoundedInsetBorder(bounds, roundness, snapChromeBorderWidth(bw), borderCol, bg)
+	} else {
+		DrawRoundedFill(bounds, roundness, bg)
 	}
 
 	// ── Text ──────────────────────────────────────────────────────────────────
@@ -361,18 +374,16 @@ func (b *Badge) drawInternal() {
 		textX = bounds.X + (textAvailW-textW)/2
 	}
 	textRect := rl.NewRectangle(bounds.X, bounds.Y, textAvailW, bounds.Height)
-	drawTextS(text, int32(textX), TextPosY(textRect, style), style)
+	popLCD := PushLCDSurfaceBackdrop(bg)
+	drawTextS(text, int32(textX), controlTextPosY(textRect, style), style)
+	PopLCDSurfaceBackdrop(popLCD)
 
 	// ── Close button ──────────────────────────────────────────────────────────
 	if b.CloseButton {
 		cr := b.closeButtonRect()
 
 		if b.hoverClose {
-			rl.DrawCircleV(
-				rl.NewVector2(cr.X+cr.Width/2, cr.Y+cr.Height/2),
-				cr.Width/2-1,
-				rl.NewColor(0, 0, 0, 35),
-			)
+			DrawCoverageCircle(cr.X+cr.Width/2, cr.Y+cr.Height/2, cr.Width/2-1, rl.NewColor(0, 0, 0, 35))
 		}
 
 		iconSize := cr.Height * 0.9
@@ -391,24 +402,22 @@ func (b *Badge) drawInternal() {
 		if !Phosphor.Draw(inner, PhosphorXCircle, PhosphorRegular, style.TextColor) {
 			Phosphor.EnsureLoaded(PhosphorX, PhosphorRegular)
 			if !Phosphor.Draw(inner, PhosphorX, PhosphorRegular, style.TextColor) {
-				drawTextS("x", int32(inner.X), TextPosY(cr, style), style)
+				drawTextS("x", int32(inner.X), controlTextPosY(cr, style), style)
 			}
-		}
-	}
-
-	// ── Optional border ──────────────────────────────────────────────────────────
-	if style.BorderWidth > 0 {
-		if useSharpQuad {
-			rl.DrawRectangleLinesEx(bounds, style.BorderWidth, style.BorderColor)
-		} else {
-			rl.DrawRectangleRoundedLinesEx(bounds, roundness, 8, style.BorderWidth, style.BorderColor)
 		}
 	}
 }
 
-// InteractionOverlayActive implements InteractionOverlayPainter.
+// InteractionOverlayActive — × hover, or unselected chip hover. Selected chrome
+// stays in the main draw so overlay compositing can’t double the 1px ring.
 func (b *Badge) InteractionOverlayActive() bool {
-	return !b.IsHidden() && b.Selected != nil && (b.hovered || b.hoverClose)
+	if b.IsHidden() {
+		return false
+	}
+	if b.CloseButton && b.hoverClose {
+		return true
+	}
+	return b.Selected != nil && b.hovered && !b.Selected.Get()
 }
 
 // DrawInteractionOverlay implements InteractionOverlayPainter.

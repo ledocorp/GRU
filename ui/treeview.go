@@ -585,38 +585,49 @@ func (tv *TreeView) Draw() {
 		indent := float32(row.depth)*treeIndent + pad
 		x := b.X + indent
 
-		// Expand/collapse triangle.
-		midY := ry + treeRowH/2
+		// Expand/collapse caret — TextPosY for labels; caret mid on ink (not line-box).
+		s := style
+		if isSelected {
+			s = styleSel
+		}
+		ty := TextPosY(rowRect, s)
+		ink := TextInkHeight(s)
+		if ink < 1 {
+			ink = EffectiveFontSize(s)
+		}
+		textMid := float32(ty) + ink*0.5
 		if len(row.node.Children) > 0 {
 			col := style.TextColor
 			if isSelected {
 				col = styleSel.TextColor
 			}
+			caret := float32(11)
+			dst := snapPhosphorRect(rl.NewRectangle(x+1, textMid-caret/2, caret, caret))
+			icon := PhosphorCaretRight
 			if row.node.expanded || row.node.clipH > 0 {
-				// ▼ down arrow
-				rl.DrawTriangle(
-					rl.NewVector2(x+2, midY-3),
-					rl.NewVector2(x+treeToggleW-2, midY-3),
-					rl.NewVector2(x+treeToggleW/2, midY+4),
-					col)
-			} else {
-				// ▶ right arrow
-				rl.DrawTriangle(
-					rl.NewVector2(x+3, midY-5),
-					rl.NewVector2(x+3, midY+5),
-					rl.NewVector2(x+treeToggleW-1, midY),
-					col)
+				icon = PhosphorCaretDown
+			}
+			Phosphor.EnsureLoaded(icon, PhosphorRegular)
+			if !Phosphor.Draw(dst, icon, PhosphorRegular, col) {
+				if row.node.expanded || row.node.clipH > 0 {
+					rl.DrawTriangle(
+						rl.NewVector2(x+2, textMid-3),
+						rl.NewVector2(x+treeToggleW-2, textMid-3),
+						rl.NewVector2(x+treeToggleW/2, textMid+4),
+						col)
+				} else {
+					rl.DrawTriangle(
+						rl.NewVector2(x+3, textMid-4),
+						rl.NewVector2(x+3, textMid+4),
+						rl.NewVector2(x+treeToggleW-1, textMid),
+						col)
+				}
 			}
 		}
 		x += treeToggleW + 2
 
 		// Icon (if present).
-		s := style
-		if isSelected {
-			s = styleSel
-		}
 		if row.node.Icon != "" {
-			ty := int32(ry) + (int32(treeRowH)-s.FontSize)/2
 			drawTextS(row.node.Icon, int32(x), ty, s)
 			x += treeIconW
 		} else if row.node.FolderGlyph {
@@ -625,7 +636,6 @@ func (tv *TreeView) Draw() {
 		}
 
 		// Label text.
-		ty := int32(ry) + (int32(treeRowH)-s.FontSize)/2
 		drawTextS(row.node.Label, int32(x), ty, s)
 	}
 

@@ -56,7 +56,7 @@ func capSubtreeWidths(maxW float32, nodes []Node) {
 			b.Width = maxW
 			layoutSetBounds(ch, b)
 			ch.MarkDirty()
-			if rt, ok := ch.(*RichText); ok {
+			if rt, ok := ch.(*RichText); ok && !ChromeWindowMoving() {
 				rt.InvalidateAutoHeightMeasure()
 			}
 		}

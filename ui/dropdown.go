@@ -37,12 +37,12 @@ type Dropdown struct {
 	Options       []string     // List of available options
 	SelectedIndex *Signal[int] // Reactive selected index
 	// FaceLabel, when set, is always shown on the closed face (toolbar menus).
-	FaceLabel string
-	Disabled      bool
-	isOpen        bool         // Whether dropdown is expanded
-	hovered       bool         // Internal hover state
-	hoveredIndex  int          // Which option is hovered (-1 = none)
-	popupScrollY  float32
+	FaceLabel      string
+	Disabled       bool
+	isOpen         bool // Whether dropdown is expanded
+	hovered        bool // Internal hover state
+	hoveredIndex   int  // Which option is hovered (-1 = none)
+	popupScrollY   float32
 	popupOpenAbove bool
 	popupListCap   float32
 }
@@ -318,51 +318,67 @@ func (d *Dropdown) drawInternal() {
 		state |= StyleStateDisabled
 	}
 	style, _ := d.ResolveStyle(state)
-	slot := d.Bounds()
-	style = effectiveFieldFaceStyle(slot, style)
-	bounds := fieldPaintBounds(slot, style)
+	// Face type size tracks list-tile titles; TextColor stays on the widget style
+	// (toolbar-menu*) so SetAppearance light/dark patches apply every frame.
+	faceStyle := style
+	if tile := GetThemeStyle("list-tile"); tile.FontSize > 0 {
+		faceStyle.FontSize = tile.FontSize
+		faceStyle.FontDensity = tile.FontDensity
+		faceStyle.MinFontSize = tile.MinFontSize
+		faceStyle.MaxFontSize = tile.MaxFontSize
+		faceStyle.NoCaptionBold = tile.NoCaptionBold
+	}
+	// Match TextInput face layout: chrome fills the slot; text at Padding from the
+	// left. Avoid fieldPaintBounds + content + extra pad (that clipped "github"/"Light").
+	layoutBounds := snapControlRect(d.Bounds())
+	chromeName := d.StyleName()
+	if chromeName == "" || chromeName == "dropdown" {
+		chromeName = "toolbar-menu"
+	}
+	drawToolbarChrome(layoutBounds, chromeName, style, d.hovered, d.isOpen, false)
 
-	drawToolbarChrome(bounds, "toolbar-menu", style, d.hovered, d.isOpen, false)
-	content := toolbarContentRect(bounds, style)
-	const (
-		caretReserve  = float32(34)
-		faceLabelPadL = float32(8)
-	)
+	pad := float32(style.Padding)
+	if pad < 8 {
+		pad = 8
+	}
+	const caretReserve = float32(34)
 	faceText := d.FaceLabel
 	if faceText == "" {
 		if idx := d.SelectedIndex.Get(); idx >= 0 && idx < len(d.Options) {
 			faceText = d.Options[idx]
 		}
 	}
-	textRect := content
-	if textRect.Width > caretReserve+faceLabelPadL+6 {
-		textRect.Width -= caretReserve
+	textW := layoutBounds.Width - pad - caretReserve
+	if textW < 8 {
+		textW = 8
 	}
-	textRect.X += faceLabelPadL
-	textRect.Width -= faceLabelPadL
-	if textRect.Width < 8 {
-		textRect.Width = 8
-	}
+	textRect := rl.NewRectangle(layoutBounds.X+pad, layoutBounds.Y, textW, layoutBounds.Height)
 	posX := int32(textRect.X + 0.5)
-	posY := toolbarTextPosY(textRect, style)
-	// Clip to the face content band (and toolbar lane when active) so glyphs
-	// cannot spill past the left chrome when the control is near a scroll edge.
-	clip := content
+	posY := toolbarTextPosY(textRect, faceStyle)
+	bw := style.BorderWidth
+	if bw < 1 {
+		bw = 1
+	}
+	clip := rl.NewRectangle(
+		layoutBounds.X+bw, layoutBounds.Y+bw,
+		layoutBounds.Width-2*bw, layoutBounds.Height-2*bw,
+	)
 	if hasActiveDrawClip {
 		clip = intersectRects(clip, activeDrawClip)
 	}
 	if clip.Width >= 1 && clip.Height >= 1 {
 		beginScissorFromRect(clip)
-		drawTextS(truncateTextS(faceText, textRect.Width, style), posX, posY, style)
+		drawTextS(truncateTextS(faceText, textRect.Width, faceStyle), posX, posY, faceStyle)
 		endNestedScissor()
 	}
-	caretTint := style.TextColor
+	caretTint := faceStyle.TextColor
 	if caretTint.A == 0 {
 		caretTint = rl.NewColor(100, 104, 120, 255)
 	} else if caretTint.A > 160 {
 		caretTint.A = 160
 	}
-	drawToolbarMenuCaret(content, d.isOpen, style, caretTint)
+	content := toolbarContentRect(layoutBounds, style)
+	drawToolbarMenuCaret(content, d.isOpen, faceStyle, caretTint)
 }
 
 // drawToolbarMenuCaret draws a caret beside toolbar menu label text (bottom-aligned with face text).
@@ -404,6 +420,15 @@ func (d *Dropdown) DrawPopup() {
 
 func (d *Dropdown) drawPopupUnclipped() {
 	style := d.GetStyle()
+	// Same type size as the closed face / list-tile titles.
+	itemStyle := style
+	if tile := GetThemeStyle("list-tile"); tile.FontSize > 0 {
+		itemStyle.FontSize = tile.FontSize
+		itemStyle.FontDensity = tile.FontDensity
+		itemStyle.MinFontSize = tile.MinFontSize
+		itemStyle.MaxFontSize = tile.MaxFontSize
+		itemStyle.NoCaptionBold = tile.NoCaptionBold
+	}
 	oh := d.optionH()
 	popupRect := d.PopupBounds()
 	panelBg, panelBorder, divider := menuPopupChromeColors(style)
@@ -415,8 +440,7 @@ func (d *Dropdown) drawPopupUnclipped() {
 	rl.DrawRectangleRec(shadowRect, rl.NewColor(0, 0, 0, 22))
 
 	panelRoundness := float32(0.08)
-	rl.DrawRectangleRounded(popupRect, panelRoundness, 8, panelBg)
-	rl.DrawRectangleRoundedLinesEx(popupRect, panelRoundness, 8, 1, panelBorder)
+	DrawRoundedTessInsetBorder(popupRect, panelRoundness, 1, panelBorder, panelBg)
 
 	beginScissorFromRect(popupRect)
 	selectedIdx := d.SelectedIndex.Get()
@@ -464,8 +488,8 @@ func (d *Dropdown) drawPopupUnclipped() {
 		}
 
 		optPosX := int32(ob.X) + int32(textPad+0.5)
-		optPosY := TextPosY(ob, style)
-		optStyle := style
+		optPosY := TextPosY(ob, itemStyle)
+		optStyle := itemStyle
 		optStyle.TextColor = textCol
 		if i == selectedIdx {
 			optStyle.Bold = true

@@ -115,7 +115,7 @@ The live WebView2 HWND sits **above** the OpenGL blit. A native modal drawn in R
 
 ```bash
 # PowerShell
-$env:GRU_WEBVIEW_DEBUG=1   # legacy alias: GORY_WEBVIEW_DEBUG=1
+$env:GRU_WEBVIEW_DEBUG=1
 go run -tags webview2 ./cmd/webviewhello
 ```
 

@@ -370,15 +370,14 @@ func (tv *TabView) drawHorizontal(drawContent bool) {
 		drawTextS(label, tx, ty, s)
 	}
 
-	// Bottom rule between tab bar and content; active accent sits flush on the seam.
-	ruleY := int32(b.Y + tabBarH - 1)
-	rl.DrawRectangle(int32(b.X), ruleY, int32(b.Width), 1, sTab.BorderColor)
+	// Bottom seam: gray rule; active accent is the bottom 2px of the tab (no float).
+	seam := int32(b.Y + tabBarH)
+	rl.DrawRectangle(int32(b.X), seam-1, int32(b.Width), 1, sTab.BorderColor)
 	if activeIdx >= 0 && activeIdx < len(tv.tabs) {
 		x := b.X + float32(activeIdx)*tabW
 		s := tv.tabStyle(activeIdx, activeIdx)
-		// Cover the gray rule under the active tab, then full-width accent on the seam.
-		rl.DrawRectangle(int32(x), ruleY, int32(tabW), 1, s.BackgroundColor)
-		rl.DrawRectangle(int32(x), ruleY-1, int32(tabW), 2, s.BorderColor)
+		// Paint accent as the last 2px of the active tab face (covers gray under it).
+		rl.DrawRectangle(int32(x), seam-2, int32(tabW), 2, s.BorderColor)
 	}
 
 	if drawContent && activeIdx >= 0 && activeIdx < len(tv.tabs) && tv.tabs[activeIdx].content != nil {

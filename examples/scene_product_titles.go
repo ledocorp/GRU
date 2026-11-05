@@ -1,6 +1,6 @@
 package examples
 
-// NotepadSceneTitle is the Gru Notepad scene id (private product).
-// Kept in a tiny shared file so non-Notepad builds (Studio / grudemo / public export)
-// can reference the name without compiling notepad_demo.go.
+// NotepadSceneTitle is the Gru Notepad scene id (product showcase).
+// Kept here so Studio / grudemo / tooling can reference the name without
+// importing apps/notepad (apps/notepad.SceneTitle aliases this constant).
 const NotepadSceneTitle = "Notepad (Go)"

@@ -32,6 +32,7 @@ type Carousel struct {
 	Index            *Signal[int]
 	AutoPlayInterval float32 // seconds; 0 = manual only
 	ShowDots         bool
+	ShowArrowCircle  bool // default false — caret only; set true for circle plate
 	autoplayTimer    float32
 	hoverPrev        bool
 	hoverNext        bool
@@ -314,23 +315,32 @@ func (c *Carousel) drawInternal() {
 	}
 
 	drawArrow := func(r rl.Rectangle, iconName, fallback string, hover bool) {
-		bg := rl.NewColor(255, 255, 255, 200)
-		if hover {
-			bg = rl.NewColor(232, 234, 255, 230)
-		}
 		cx := r.X + r.Width/2
 		cy := r.Y + r.Height/2
-		rl.DrawCircleV(rl.NewVector2(cx, cy), r.Width/2, bg)
+		if c.ShowArrowCircle {
+			bg := rl.NewColor(255, 255, 255, 255)
+			if hover {
+				bg = rl.NewColor(232, 234, 255, 255)
+			}
+			DrawCoverageCircle(cx, cy, r.Width/2, bg)
+		}
 		col := style.TextColor
 		if col.A == 0 {
 			col = rl.NewColor(55, 48, 163, 255)
 		}
-		iconSize := phosphorIconDrawSize(r.Width, 0)
+		if hover && !c.ShowArrowCircle {
+			col = rl.NewColor(79, 70, 229, 255)
+		}
+		// Caret ~55% of hit target — keep 40px hit rect for clicks.
+		iconSize := phosphorIconDrawSize(r.Width*0.55, 0)
+		if iconSize < 16 {
+			iconSize = 16
+		}
 		dst := snapPhosphorRect(rl.NewRectangle(cx-iconSize/2, cy-iconSize/2, iconSize, iconSize))
 		Phosphor.EnsureLoaded(iconName, PhosphorRegular)
 		if !Phosphor.Draw(dst, iconName, PhosphorRegular, col) {
 			tst := style
-			tst.FontSize = 20
+			tst.FontSize = 16
 			tst.Bold = true
 			iw := measureTextS(fallback, tst)
 			drawTextS(fallback, int32(dst.X+(dst.Width-float32(iw))/2), TextPosY(dst, tst), tst)
@@ -346,7 +356,7 @@ func (c *Carousel) drawInternal() {
 			if i == idx {
 				col = rl.NewColor(79, 70, 229, 255)
 			}
-			rl.DrawCircleV(rl.NewVector2(dr.X+dr.Width/2, dr.Y+dr.Height/2), dr.Width/2, col)
+			DrawCoverageCircle(dr.X+dr.Width/2, dr.Y+dr.Height/2, dr.Width/2, col)
 		}
 	}
 }

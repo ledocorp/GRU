@@ -101,6 +101,9 @@ func (l *Label) Layout() {
 	if !l.IsAutoHeight() {
 		return
 	}
+	if ChromeWindowMoving() && l.Bounds().Height > 0 {
+		return
+	}
 
 	res := applyFlexAutoHeightLayout(l, &l.measure, l.Bounds(), func(w float32) float32 {
 		return l.intrinsicHeight(w)
@@ -117,15 +120,19 @@ func (l *Label) Layout() {
 func (l *Label) intrinsicHeight(width float32) float32 {
 	style := l.GetStyle()
 	fs := EffectiveFontSize(style)
+	lineH := TextLineBoxHeight(style)
+	if lineH < fs {
+		lineH = fs
+	}
 	if !l.Wrap || width < 24 {
-		return EffectiveFontSize(style) + labelPadY
+		return lineH + labelPadY
 	}
 	lines := wrapLabelLines(l.Text.Get(), width, style)
 	if len(lines) == 0 {
-		return fs + labelPadY
+		return lineH + labelPadY
 	}
 	const lineGap = labelWrappedLineGap
-	return float32(len(lines))*fs + float32(len(lines)-1)*float32(lineGap) + labelPadY
+	return float32(len(lines))*lineH + float32(len(lines)-1)*float32(lineGap) + labelPadY
 }
 
 func wrapLabelLines(text string, maxW float32, style Style) []string {
@@ -243,10 +250,14 @@ func (l *Label) drawInternal() {
 
 	if l.Wrap && b.Width >= 24 {
 		lines := wrapLabelLines(text, b.Width, style)
-		blockH := int32(len(lines))*int32(fs) + int32(len(lines)-1)*lineGap
+		lineH := TextLineBoxHeight(style)
+		if lineH < fs {
+			lineH = fs
+		}
+		blockH := int32(len(lines))*int32(lineH) + int32(len(lines)-1)*lineGap
 		startY := int32(b.Y) + labelTopPad(b.Height, blockH)
 		for i, line := range lines {
-			drawLine(line, startY+int32(i)*(int32(fs)+lineGap))
+			drawLine(line, startY+int32(i)*(int32(lineH)+lineGap))
 		}
 	} else if !l.Wrap && float32(measureTextS(text, style)) > b.Width-4 && b.Width >= 8 {
 		// Single-line overflow: clip to cell instead of painting over siblings.

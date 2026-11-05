@@ -122,7 +122,7 @@ func (pb *ProgressBar) paint(v float32, showFill bool) {
 	}
 
 	if roundness > 0 {
-		rl.DrawRectangleRounded(bounds, roundness, 8, style.BackgroundColor)
+		DrawRoundedFill(bounds, roundness, style.BackgroundColor)
 	} else {
 		rl.DrawRectangleRec(bounds, style.BackgroundColor)
 	}
@@ -155,23 +155,30 @@ func (pb *ProgressBar) paint(v float32, showFill bool) {
 	if fillW >= 0.5 {
 		fill := rl.NewRectangle(bounds.X, bounds.Y, fillW, bounds.Height)
 		if fillRoundness > 0 {
-			rl.DrawRectangleRounded(fill, fillRoundness, 8, fillColor)
+			DrawRoundedFill(fill, fillRoundness, fillColor)
 		} else {
 			rl.DrawRectangleRec(fill, fillColor)
 		}
 	}
 
 	if bounds.Height >= 18 {
-		const pctFontSize = int32(13)
 		label := fmt.Sprintf("%d%%", int32(v*100+0.5))
-		textW := measureText(label, pctFontSize)
-		textX := int32(bounds.X) + (int32(bounds.Width)-textW)/2
-		textY := int32(bounds.Y) + (int32(bounds.Height)-pctFontSize)/2
-		textColor := style.TextColor
+		pct := style
+		pct.FontSize = 13
+		pct.Bold = true
+		dest := style.BackgroundColor
 		if v > 0.45 {
-			textColor = rl.NewColor(255, 255, 255, 210)
+			pct.TextColor = rl.NewColor(255, 255, 255, 255)
+			dest = fillColor
+		} else {
+			pct.TextColor = rl.NewColor(40, 42, 60, 255)
 		}
-		drawText(label, textX, textY, pctFontSize, textColor)
+		textW := measureTextS(label, pct)
+		textX := int32(bounds.X) + (int32(bounds.Width)-textW)/2
+		textY := controlTextPosY(bounds, pct)
+		pop := PushLCDSurfaceBackdrop(dest)
+		drawTextS(label, textX, textY, pct)
+		PopLCDSurfaceBackdrop(pop)
 	}
 }
 

@@ -51,7 +51,8 @@ func runCheck(args []string) error {
 	if err := checkStep(root, "go build", "go", "build", "./..."); err != nil {
 		return err
 	}
-	hasNotepad := fileExists(filepath.Join(root, "examples", "notepad_demo.go"))
+	hasNotepad := fileExists(filepath.Join(root, "apps", "notepad", "notepad_demo.go")) ||
+		fileExists(filepath.Join(root, "apps", "notepad", "register.go"))
 	hasDemo := fileExists(filepath.Join(root, "examples", "public_catalog.go"))
 	if hasNotepad {
 		if err := checkStep(root, "go build notepad", "go", "build", "-tags", "notepad", "./..."); err != nil {

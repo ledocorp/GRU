@@ -9,7 +9,11 @@ func TestVerticalViewportHandlesWheelScroll(t *testing.T) {
 	}
 	hp := NewHorizontalViewport("hp", 0, 0, 200, 100)
 	if hp.HandlesWheelScroll() {
-		t.Fatal("horizontal viewport should not claim vertical wheel")
+		t.Fatal("empty horizontal viewport should not claim wheel")
+	}
+	hp.contentWidth = 400
+	if !hp.HandlesWheelScroll() {
+		t.Fatal("horizontal viewport with overflow should claim wheel")
 	}
 }
 

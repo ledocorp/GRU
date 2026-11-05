@@ -39,10 +39,13 @@ func SetTextEngineMode(mode TextEngineMode) {
 func TextEngineBackendName() string {
 	switch textEngineMode {
 	case TextEngineShaped:
-		if shapedGlyphCacheEnabled() {
-			return "shaped+glyph-cache"
-		}
 		if shapedTextReady() {
+			if fxGlyphBackendActive() {
+				return "shaped+fx-glyphs"
+			}
+			if shapedGlyphCacheEnabled() {
+				return "shaped+glyph-cache"
+			}
 			return "shaped+outline-glyphs"
 		}
 		if sdfReady {

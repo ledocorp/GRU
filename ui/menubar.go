@@ -235,10 +235,7 @@ func (mb *MenuBar) drawInternal() {
 		rl.DrawRectangleRec(b, style.BackgroundColor)
 	}
 	if style.BorderWidth > 0 && style.BorderColor.A > 0 {
-		rl.DrawLineEx(
-			rl.NewVector2(b.X, b.Y+b.Height),
-			rl.NewVector2(b.X+b.Width, b.Y+b.Height),
-			style.BorderWidth, style.BorderColor)
+		rl.DrawRectangle(int32(b.X), int32(b.Y+b.Height)-1, int32(b.Width), 1, style.BorderColor)
 	}
 	highlight := mb.highlightMenuIdx()
 	hoverStyle := GetThemeStyle("menubar-hover")
@@ -248,12 +245,20 @@ func (mb *MenuBar) drawInternal() {
 			rl.DrawRectangleRec(r, hoverStyle.BackgroundColor)
 		}
 		textStyle := style
-		if i == highlight && hoverStyle.TextColor.A > 0 {
-			textStyle.TextColor = hoverStyle.TextColor
+		dest := style.BackgroundColor
+		if i == highlight {
+			if hoverStyle.TextColor.A > 0 {
+				textStyle.TextColor = hoverStyle.TextColor
+			}
+			if hoverStyle.BackgroundColor.A > 0 {
+				dest = hoverStyle.BackgroundColor
+			}
 		}
 		tw := measureTextS(menu.Label, textStyle)
 		tx := int32(r.X + (r.Width-float32(tw))/2)
 		ty := TextPosY(r, textStyle)
+		popLCD := PushLCDSurfaceBackdrop(dest)
 		drawTextS(menu.Label, tx, ty, textStyle)
+		PopLCDSurfaceBackdrop(popLCD)
 	}
 }

@@ -58,12 +58,29 @@ func drawRemixIcon(dst rl.Rectangle, cp rune, tint rl.Color, strokeScale float32
 		}
 	}
 	remixIcons.mu.Lock()
-	font := remixIcons.font
-	loaded := remixIcons.loadedCP
 	ready := remixIcons.ready
+	var font rl.Font
+	var loaded map[int32]struct{}
+	exact := float32(0)
+	if ready && PreferIconSharp1x() {
+		dstSnap := snapPhosphorRect(dst)
+		sz := phosphorFontDrawSize(dstSnap)
+		if strokeScale > 0 && strokeScale < 1 {
+			sz = quantizeIconDrawSize(sz * strokeScale)
+		}
+		if strike := remixIcons.ensureStrikeLocked(int32(sz + 0.5)); strike != nil {
+			font = strike.font
+			loaded = strike.loadedCP
+			exact = float32(strike.basePx)
+		}
+	}
+	if font.Texture.ID == 0 {
+		font = remixIcons.font
+		loaded = remixIcons.loadedCP
+	}
 	remixIcons.mu.Unlock()
 	if !ready {
 		return false
 	}
-	return remixDrawCodepoint(font, loaded, dst, cp, tint, strokeScale)
+	return remixDrawCodepoint(font, loaded, dst, cp, tint, strokeScale, exact)
 }

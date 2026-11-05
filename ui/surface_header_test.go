@@ -10,9 +10,9 @@ func TestSurfaceHeaderHeightUntitled(t *testing.T) {
 }
 
 func TestSurfaceHeaderHeightTitled(t *testing.T) {
-	h := SurfaceHeader{Title: "Settings", TitleHeight: 36, Mode: HeaderModeInset}
-	if h.Height() != 36 {
-		t.Fatalf("height = %v, want 36", h.Height())
+	h := SurfaceHeader{Title: "Settings", TitleHeight: 40, Mode: HeaderModeInset}
+	if h.Height() != 40 {
+		t.Fatalf("height = %v, want 40", h.Height())
 	}
 }
 

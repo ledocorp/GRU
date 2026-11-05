@@ -200,8 +200,11 @@ func (b *Button) drawInternal() {
 		// Left-align in the inner band — SDF measureTextS is slightly narrower than
 		// drawTextS ink, so centering looked like extra padding on the left (Sync/Clear).
 		posX := int32(inner.X + 0.5)
-		posY := toolbarTextPosY(inner, style)
+		posY := controlTextPosY(snap, style)
+		tbBg, _ := toolbarInteractionColors(b.styleName, b.hovered, b.pressed, false)
+		popLCD := PushLCDSurfaceBackdrop(tbBg)
 		drawTextS(text, posX, posY, style)
+		PopLCDSurfaceBackdrop(popLCD)
 		return
 	}
 	if b.styleName == "toolbar-toggle-label" {
@@ -222,7 +225,7 @@ func (b *Button) drawInternal() {
 		text := b.Text.Get()
 		textW := measureTextS(text, draw)
 		posX := int32(content.X) + (int32(content.Width)-textW)/2
-		posY := toolbarTextPosY(content, draw)
+		posY := controlTextPosY(b.Bounds(), draw)
 		drawTextS(text, posX, posY, draw)
 		return
 	}
@@ -235,13 +238,15 @@ func (b *Button) drawInternal() {
 	// Rounded fill only (ribbon-tab style — no outline stroke).
 	drawRoundedControl(rect, scaledW, scaledH, style.CornerRadius, color)
 
-	// Center text
+	// Center on the filled chrome rect (not padded content) — matches Sign-in /
+	// footer Directory target. Cap-vs-ascent Y under S1 ClearType.
 	text := b.Text.Get()
 	textW := measureTextS(text, style)
-	posX := int32(b.Bounds().X) + (int32(b.Bounds().Width)-textW)/2
-	posY := TextPosY(b.Bounds(), style)
-
+	posX := int32(rect.X) + (int32(rect.Width)-textW)/2
+	posY := controlTextPosY(rect, style)
+	popLCD := PushLCDSurfaceBackdrop(color)
 	drawTextS(text, posX, posY, style)
+	PopLCDSurfaceBackdrop(popLCD)
 }
 
 // IsInteractive implements Node.IsInteractive.
@@ -314,7 +319,7 @@ func drawRoundedControl(rect rl.Rectangle, w, h, cornerRadius float32, fill rl.C
 		rl.DrawRectangleRec(rect, fill)
 		return
 	}
-	rl.DrawRectangleRounded(rect, roundness, controlRoundSegments, fill)
+	DrawRoundedFill(rect, roundness, fill)
 }
 
 // buttonCornerRoundness maps style.CornerRadius and rect size to DrawRectangleRounded
@@ -351,7 +356,7 @@ func toolbarInteractionColors(styleName string, hovered, pressed, checked bool) 
 		border = rl.NewColor(222, 226, 230, 255)
 	}
 	switch styleName {
-	case "toolbar-btn", "toolbar-menu":
+	case "toolbar-btn", "toolbar-menu", "toolbar-menu-value":
 		if pressed {
 			bg = rl.ColorBrightness(bg, -0.08)
 			border = rl.ColorBrightness(border, -0.12)
@@ -373,6 +378,28 @@ func toolbarInteractionColors(styleName string, hovered, pressed, checked bool) 
 		}
 	}
 	return bg, border
+}
+
+// toolbarCellOpaqueBackdrop returns an opaque RGB for ClearType LCD under ribbon
+// ghost cells. Semi-transparent hover/checked fills must be composited over the
+// ribbon shell or caption ink gets white LCD fringes.
+func toolbarCellOpaqueBackdrop(hovered, pressed, checked bool) rl.Color {
+	ribbon := GetThemeStyle("toolbar-ribbon").BackgroundColor
+	if ribbon.A == 0 {
+		ribbon = rl.NewColor(248, 249, 252, 255)
+	}
+	hi, _ := toolbarInteractionColors("toolbar-cell", hovered, pressed, checked)
+	if hi.A == 0 {
+		return ribbon
+	}
+	a := float32(hi.A) / 255
+	inv := 1 - a
+	return rl.NewColor(
+		uint8(float32(ribbon.R)*inv+float32(hi.R)*a),
+		uint8(float32(ribbon.G)*inv+float32(hi.G)*a),
+		uint8(float32(ribbon.B)*inv+float32(hi.B)*a),
+		255,
+	)
 }
 
 // toolbarStylePadding is inner inset between toolbar control chrome and icon/label.

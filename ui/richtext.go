@@ -70,6 +70,9 @@ func (rt *RichText) setBoundsNoMark(r rl.Rectangle) {
 }
 
 func (rt *RichText) invalidateMeasureIfWidthChanged(newW float32) {
+	if ChromeWindowMoving() {
+		return
+	}
 	if rt.bounds.Width > 0 && absF(newW-rt.bounds.Width) > 0.5 {
 		rt.lastMeasuredW = 0
 	}
@@ -123,6 +126,11 @@ func (rt *RichText) SetSpans(spans []TextSpan) {
 func (rt *RichText) Layout() {
 	defer func() { rt.layoutDirty = false }()
 	if rt.IsHidden() || !rt.IsAutoHeight() {
+		return
+	}
+	// Live resize: flex assigns new width every frame — skip wrap remeasure mid-drag;
+	// preview settle reflow (Notepad tickPreviewReflow) restores correct heights.
+	if ChromeWindowMoving() && rt.bounds.Height > 0 {
 		return
 	}
 	b := rt.Bounds()
@@ -251,7 +259,12 @@ func (rt *RichText) contentBand(bounds rl.Rectangle) rl.Rectangle {
 }
 
 func (rt *RichText) tokenLineHeight(st Style) float32 {
-	return EffectiveFontSize(st) + rt.LineGap
+	box := TextLineBoxHeight(st)
+	fs := EffectiveFontSize(st)
+	if box < fs {
+		box = fs
+	}
+	return box + rt.LineGap
 }
 
 func (rt *RichText) drawRuns(b rl.Rectangle) {
@@ -260,12 +273,11 @@ func (rt *RichText) drawRuns(b rl.Rectangle) {
 		if rt.tokenSelected(tok.index) {
 			rl.DrawRectangleRec(rect, rl.NewColor(79, 70, 229, 42))
 		}
-		fs := EffectiveFontSize(tok.style)
 		var drawY float32
 		if rt.styleName == "statusbar-label" {
 			drawY = float32(statusBarTextPosY(rect, tok.style))
 		} else {
-			drawY = rect.Y + (rect.Height-fs)*0.5
+			drawY = float32(controlTextPosY(rect, tok.style))
 		}
 		if tok.code && tok.text != "" && tok.text != "\n" {
 			padY := float32(2)
@@ -288,7 +300,9 @@ func (rt *RichText) drawRuns(b rl.Rectangle) {
 			if tok.link == rt.hoveredLink {
 				underline = rl.ColorBrightness(underline, 0.18)
 			}
-			rl.DrawRectangle(int32(rect.X), int32(rect.Y+rect.Height-2), int32(rect.Width), 1, underline)
+			// Below the line box so descenders (g, y) are not crossed (C15).
+			uy := int32(rect.Y + rect.Height + 1)
+			rl.DrawRectangle(int32(rect.X), uy, int32(rect.Width), 1, underline)
 		}
 		return true
 	})

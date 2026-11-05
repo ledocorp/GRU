@@ -7,8 +7,8 @@ import rl "github.com/gen2brain/raylib-go/raylib"
 // Refreshed at startup and on window resize via [RefreshDisplayScale].
 var DisplayScale float32 = 1
 
-// BaseSupersamplingScale is the user-facing SSAA tier before DPI (F10 / perf monitor may change this).
-var BaseSupersamplingScale float32 = 2
+// BaseSupersamplingScale is the user-facing SSAA tier (native ship default 1×).
+var BaseSupersamplingScale float32 = 1
 
 // RefreshDisplayScale reads [rl.GetWindowScaleDPI] and updates [DisplayScale].
 func RefreshDisplayScale() {
@@ -46,5 +46,6 @@ func ApplyDisplayAwareSupersampling(w, h int32) bool {
 	}
 	reinit := ReinitDisplayAwareAtlasesIfNeeded()
 	RescaleSupersampling(EffectiveSupersamplingScale(), w, h)
+	SyncRemixIconFilter()
 	return reinit
 }

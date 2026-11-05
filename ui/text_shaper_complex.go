@@ -22,7 +22,15 @@ var complexScriptFontReady bool
 
 var (
 	shapedDevanagari *font.Face
+	shapedArabic     *font.Face
 )
+
+var arabicFontCandidates = []string{
+	"C:/Windows/Fonts/segoeui.ttf",
+	"C:/Windows/Fonts/arial.ttf",
+	"C:/Windows/Fonts/tahoma.ttf",
+	"C:/Windows/Fonts/calibri.ttf",
+}
 
 var devanagariFontCandidates = []string{
 	"C:/Windows/Fonts/Nirmala.ttc",
@@ -34,9 +42,13 @@ var devanagariFontCandidates = []string{
 }
 
 // shapedFontCollection maps dominant script → TTF face (Skia FontCollection pattern).
-// Latin/Arabic use the UI stack from pickShapedFace; Devanagari uses Nirmala/Noto when present.
+// Latin uses the UI stack; Arabic → Segoe/Arial; Devanagari → Nirmala/Noto.
 func shapedFaceForScript(sc language.Script, bold, italic, mono, preview bool) *font.Face {
 	switch sc {
+	case language.Arabic, language.Hebrew:
+		if shapedArabic != nil {
+			return shapedArabic
+		}
 	case language.Devanagari:
 		if shapedDevanagari != nil {
 			return shapedDevanagari
@@ -46,12 +58,18 @@ func shapedFaceForScript(sc language.Script, bold, italic, mono, preview bool) *
 }
 
 func initShapedScriptFaces() {
-	if shapedDevanagari != nil {
-		return
+	if shapedDevanagari == nil {
+		if p := firstExisting(devanagariFontCandidates...); p != "" {
+			if f, err := loadShapedFace(p); err == nil {
+				shapedDevanagari = f
+			}
+		}
 	}
-	if p := firstExisting(devanagariFontCandidates...); p != "" {
-		if f, err := loadShapedFace(p); err == nil {
-			shapedDevanagari = f
+	if shapedArabic == nil {
+		if p := firstExisting(arabicFontCandidates...); p != "" {
+			if f, err := loadShapedFace(p); err == nil {
+				shapedArabic = f
+			}
 		}
 	}
 }
@@ -172,7 +190,7 @@ func EnsureComplexScriptUIFont() {
 	}
 	path := LoadedUIFontPath
 	if path == "" {
-		path = firstExisting(fontCandidates...)
+		path = firstExisting(resolvedFontCandidates()...)
 	}
 	if path == "" {
 		return

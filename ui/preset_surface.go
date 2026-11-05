@@ -4,7 +4,7 @@ package ui
 // Visual preset surfaces (card + panel) share one rhythm so gallery/showcase rows align.
 const (
 	PresetSurfacePadding      = float32(16)
-	PresetSurfaceTitleHeight  = float32(36)
+	PresetSurfaceTitleHeight  = float32(40)
 	PresetSurfaceCornerRadius = float32(10)
 	PresetSurfaceBorderWidth  = float32(2)
 	PresetSurfaceFontSize     = int32(18)

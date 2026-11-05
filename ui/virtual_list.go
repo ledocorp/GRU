@@ -323,9 +323,9 @@ func (vl *VirtualList[T]) Draw() {
 func (vl *VirtualList[T]) drawScrollbar(viewportH, barW float32) {
 	trackX, trackY, thumbY, thumbH, _ := vl.thumbGeom(viewportH, barW)
 	track := rl.NewRectangle(trackX, trackY, barW, viewportH)
-	rl.DrawRectangleRounded(track, 1, 6, rl.NewColor(229, 231, 235, 96))
+	DrawRoundedFill(track, 1, rl.NewColor(229, 231, 235, 96))
 	thumb := rl.NewRectangle(trackX+1, thumbY, barW-2, thumbH)
-	rl.DrawRectangleRounded(thumb, 1, 6, rl.NewColor(148, 163, 184, 210))
+	DrawRoundedFill(thumb, 1, rl.NewColor(148, 163, 184, 210))
 }
 
 func (vl *VirtualList[T]) HandlesWheelScroll() bool { return true }

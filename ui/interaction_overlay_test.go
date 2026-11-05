@@ -87,12 +87,24 @@ func TestInteractionOverlayWakeSkipsStackedRibbonCell(t *testing.T) {
 
 func TestInteractionOverlayWakeIconHover(t *testing.T) {
 	btn := NewIconButton("btn", "", "Save", 0, 0, 40, 40)
+	btn.styleName = "appbar-icon"
 	btn.hovered = true
+	if !btn.ghostChrome() {
+		t.Fatal("expected ghost chrome for appbar-icon")
+	}
 	root := NewContainer("root", 0, 0, 200, 200)
 	root.AddChild(btn)
 	wake := CollectInteractionOverlayWake(root)
 	if !wake.Any() {
-		t.Fatal("hovered icon should wake overlay exploration")
+		t.Fatal("hovered ghost icon should wake overlay exploration")
+	}
+}
+
+func TestSolidIconButtonHoverMarksCacheNotOverlay(t *testing.T) {
+	btn := NewIconButton("btn", "", "Save", 0, 0, 40, 40)
+	btn.hovered = true
+	if btn.InteractionOverlayActive() {
+		t.Fatal("solid icon hover should redraw in SSAA cache, not overlay")
 	}
 }
 

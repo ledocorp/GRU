@@ -304,23 +304,29 @@ func (f *Form) Draw() {
 	}
 
 	// ── Container background ──────────────────────────────────────────────
-	if style.CornerRadius > 0 {
-		r := style.CornerRadius / b.Height
-		if r > 0.5 {
-			r = 0.5
+	if style.BackgroundColor.A > 0 || style.BorderWidth > 0 {
+		bw := style.BorderWidth
+		if bw <= 0 && style.BackgroundColor.A > 0 {
+			bw = 0
 		}
-		if style.BackgroundColor.A > 0 {
-			rl.DrawRectangleRounded(b, r, 8, style.BackgroundColor)
+		r := float32(0)
+		if style.CornerRadius > 0 && b.Height > 0 {
+			r = style.CornerRadius / b.Height
+			if r > 0.5 {
+				r = 0.5
+			}
 		}
-		if style.BorderWidth > 0 {
-			rl.DrawRectangleRoundedLinesEx(b, r, 8, style.BorderWidth, style.BorderColor)
+		borderCol := style.BorderColor
+		fillCol := style.BackgroundColor
+		if fillCol.A == 0 {
+			fillCol = rl.NewColor(255, 255, 255, 255)
 		}
-	} else {
-		if style.BackgroundColor.A > 0 {
-			rl.DrawRectangleRec(b, style.BackgroundColor)
-		}
-		if style.BorderWidth > 0 {
-			rl.DrawRectangleLinesEx(b, style.BorderWidth, style.BorderColor)
+		if bw > 0 {
+			DrawRoundedTessInsetBorder(b, r, bw, borderCol, fillCol)
+		} else if r > 0 {
+			rl.DrawRectangleRounded(b, r, 8, fillCol)
+		} else {
+			rl.DrawRectangleRec(b, fillCol)
 		}
 	}
 

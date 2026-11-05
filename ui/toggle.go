@@ -13,7 +13,6 @@ var (
 const (
 	toggleThumbPad         = float32(2)
 	toggleInnerRatio       = float32(0.88) // inner disc radius vs thumb outer (thin color ring)
-	toggleRoundSegments    = 16
 	toggleTrackWidthRatio  = float32(0.90) // visual track width vs allocated bounds width
 	toggleTrackHeightRatio = float32(0.9075) // 0.825 × 1.10 — visual track height vs allocated bounds height
 )
@@ -253,18 +252,14 @@ func (tg *Toggle) drawInternal() {
 		trackColor = rl.ColorBrightness(trackColor, -0.04)
 	}
 
-	rl.DrawRectangleRounded(pill, roundness, toggleRoundSegments, trackColor)
+	DrawRoundedFill(pill, roundness, trackColor)
 
-	cx, cy, outerR, innerR := tg.thumbGeometry(pill)
+	cx, cy, outerR, _ := tg.thumbGeometry(pill)
 	thumbFill := toggleThumbFill
 	if tg.Disabled {
 		thumbFill = rl.NewColor(245, 246, 250, 255)
 	}
-	rl.DrawCircle(int32(cx), int32(cy), outerR, thumbFill)
-	if innerR > 1 {
-		inner := rl.ColorBrightness(thumbFill, -0.06)
-		rl.DrawCircle(int32(cx), int32(cy), innerR, inner)
-	}
+	DrawCoverageCircle(cx, cy, outerR, thumbFill)
 }
 
 // IsInteractive implements Node.IsInteractive.

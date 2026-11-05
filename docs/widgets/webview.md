@@ -93,4 +93,4 @@ Full table: [../WEBVIEW.md](../WEBVIEW.md#anti-patterns-do-not-reintroduce).
 2. **FillClient vs nested:** `FillClient=true` for web-first apps; nested panel embeds for module-style UI (**WebView Module Demo**).
 3. **Focus handoff:** **WebView Focus Handoff** shows pointer routing between native text editor and web — copy `RouteScenePointerFocus` patterns from the demo host.
 4. **Shell choice:** app-shell or flex column with `WebViewPanel` as **`SetFlexGrow(1)`** direct child.
-5. **Debug:** `$env:GORY_WEBVIEW_DEBUG=1` + Shift+F11 — [../WEBVIEW.md](../WEBVIEW.md#debug).
+5. **Debug:** `$env:GRU_WEBVIEW_DEBUG=1` + Shift+F11 — [../WEBVIEW.md](../WEBVIEW.md#debug).

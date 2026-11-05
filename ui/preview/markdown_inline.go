@@ -29,15 +29,13 @@ func inlineSpans(n ast.Node, source []byte, flags inlineFlags, ctx *mdBuildCtx) 
 func inlineNode(n ast.Node, source []byte, flags inlineFlags, ctx *mdBuildCtx) []ui.TextSpan {
 	switch nn := n.(type) {
 	case *ast.Text:
-		v := nn.Value(source)
-		if len(v) == 0 {
-			return nil
-		}
-		s := unescapeMarkdownPunct(string(v))
-		// Soft breaks are line wraps in source, not hard paragraphs — keep flowing text.
-		if nn.SoftLineBreak() {
-			s += " "
-		} else if nn.HardLineBreak() {
+		// Goldmark often emits HardLineBreak on an empty Text node (trailing "  \n").
+		// Must not early-return on empty value or Site/Repo-style stacks collapse to one line.
+		s := unescapeMarkdownPunct(string(nn.Value(source)))
+		// Soft break = single newline in the source. CommonMark turns these into
+		// spaces; for Notepad/preview we keep a visible line break so editor and
+		// preview stay aligned (blank line still starts a new paragraph).
+		if nn.SoftLineBreak() || nn.HardLineBreak() {
 			s += "\n"
 		}
 		if s == "" {

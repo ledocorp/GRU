@@ -3,8 +3,6 @@
 package ui
 
 import (
-	"math"
-
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
@@ -48,8 +46,8 @@ import (
 //     when selected.
 //   - The label text to the right of the circle.
 //
-// Both the outer ring and arc use raylib DrawRing so every circle has smooth,
-// anti-aliased edges regardless of size. The segment count scales with radius.
+// Both the outer ring and disc use G1.1 coverage AA at SSAA 1× (DrawCoverageRing /
+// DrawCoverageCircle); with scene SSAA they fall back to tessellated primitives.
 //
 // # Style
 //
@@ -64,10 +62,9 @@ import (
 // disabled mask, and layout direction.
 
 const (
-	rgCircleR    = float32(8)  // outer radius of the radio indicator
-	rgCircleGap  = float32(8)  // gap between circle right edge and label
-	rgRowPadX    = float32(10) // left/right padding inside each option row
-	rgCircleSegs = int32(48)   // DrawRing segments — smooth at all sizes
+	rgCircleR   = float32(8)  // outer radius of the radio indicator
+	rgCircleGap = float32(8)  // gap between circle right edge and label
+	rgRowPadX   = float32(10) // left/right padding inside each option row
 )
 
 // RadioGroup is a set of mutually exclusive toggle options.
@@ -206,29 +203,28 @@ func (rg *RadioGroup) drawInternal() {
 		// ── Hover highlight ───────────────────────────────────────────────────
 		if isHovered && !isDisabled {
 			hRect := rl.NewRectangle(row.X+2, row.Y+2, row.Width-4, row.Height-4)
-			rl.DrawRectangleRounded(hRect, 0.4, 6, styleHov.BackgroundColor)
+			DrawRoundedFill(hRect, 0.4, styleHov.BackgroundColor)
 		}
 
 		// ── Circle indicator ──────────────────────────────────────────────────
 		cx, cy := rg.circleCenter(row)
 		cr := rg.CircleRadius
 		innerR := cr - 2 // border width = 2px
-		segs := smoothRingSegs(cr)
 
 		if isDisabled {
-			rl.DrawRing(rl.NewVector2(cx, cy), innerR, cr, 0, 360, segs, styleDis.BorderColor)
-			rl.DrawCircleV(rl.NewVector2(cx, cy), innerR, styleDis.BackgroundColor)
+			DrawCoverageRing(cx, cy, innerR, cr, 0, 360, styleDis.BorderColor)
+			DrawCoverageCircle(cx, cy, innerR, styleDis.BackgroundColor)
 		} else if isSelected {
 			// Filled indigo disc.
-			rl.DrawCircleV(rl.NewVector2(cx, cy), cr, styleSel.BackgroundColor)
+			DrawCoverageCircle(cx, cy, cr, styleSel.BackgroundColor)
 			// Outer border ring (thin, slightly darker).
-			rl.DrawRing(rl.NewVector2(cx, cy), cr-1.5, cr, 0, 360, segs, styleSel.BorderColor)
+			DrawCoverageRing(cx, cy, cr-1.5, cr, 0, 360, styleSel.BorderColor)
 			// Inner white dot (≈40% of radius).
-			rl.DrawCircleV(rl.NewVector2(cx, cy), cr*0.38, rl.NewColor(255, 255, 255, 255))
+			DrawCoverageCircle(cx, cy, cr*0.38, rl.NewColor(255, 255, 255, 255))
 		} else {
-			// Hollow circle: fill the centre with near-white, draw ring border.
-			rl.DrawCircleV(rl.NewVector2(cx, cy), innerR, styleNorm.BackgroundColor)
-			rl.DrawRing(rl.NewVector2(cx, cy), innerR, cr, 0, 360, segs, styleNorm.BorderColor)
+			// Hollow: fill full disc then one outer ring (innerR fill + ring = double AA).
+			DrawCoverageCircle(cx, cy, cr, styleNorm.BackgroundColor)
+			DrawCoverageRing(cx, cy, cr-1.15, cr, 0, 360, styleNorm.BorderColor)
 		}
 
 		// ── Label text ────────────────────────────────────────────────────────
@@ -276,18 +272,6 @@ func (rg *RadioGroup) circleCenter(row rl.Rectangle) (cx, cy float32) {
 	cx = row.X + rgRowPadX + rg.CircleRadius
 	cy = row.Y + row.Height/2
 	return
-}
-
-// ─── Smooth arc helper ────────────────────────────────────────────────────────
-
-// smoothRingSegs returns a segment count that keeps DrawRing smooth.
-// ~1 segment per 2° of arc at the given radius.
-func smoothRingSegs(radius float32) int32 {
-	segs := int32(math.Ceil(float64(radius) * math.Pi))
-	if segs < rgCircleSegs {
-		return rgCircleSegs
-	}
-	return segs
 }
 
 // InteractionOverlayActive implements InteractionOverlayPainter.

@@ -53,8 +53,20 @@ func main() {
 			fmt.Fprintf(os.Stderr, "gru check: %v\n", err)
 			os.Exit(1)
 		}
+	case "export":
+		if err := runExport(os.Args[2:]); err != nil {
+			fmt.Fprintf(os.Stderr, "gru export: %v\n", err)
+			os.Exit(1)
+		}
 	case "help", "-h", "--help":
 		printUsage(os.Stdout)
+	case "hello", "calc", "leandemo", "webviewhello", "demo", "notepad":
+		// Convenience: `gru notepad` → `gru build notepad` (common mistype).
+		fmt.Fprintf(os.Stderr, "note: use `gru build %s` (alias accepted)\n", os.Args[1])
+		if err := runBuild(os.Args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "gru build: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "gru: unknown command %q\n", os.Args[1])
 		printUsage(os.Stderr)
@@ -78,6 +90,7 @@ Usage:
   gru icons regen
   gru fonts convert INPUT.woff2 [-o OUT.ttf]
   gru check [-skip-vuln] [-skip-lint] [-skip-full-test] [-full-lint]
+  gru export [-o DIR]                  assemble public GitHub tree (default staging/export)
 
 Apps:
   hello         native public sample (./cmd/hello)

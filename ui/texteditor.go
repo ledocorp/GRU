@@ -187,6 +187,7 @@ func (ed *TextEditor) flushContentDirty() {
 		ed.frameDirty = false
 		if ed.IsAutoHeight() {
 			ed.Layout()
+			ed.ensureCursorVisible()
 		}
 		ed.MarkDrawDirty()
 	}
@@ -242,7 +243,12 @@ func (ed *TextEditor) updateCaretTimeline(dt float32) {
 	}
 }
 
-func (ed *TextEditor) innerTextWidth(style Style) float32 {
+// WrapInnerWidth is the wrap measure budget (same as displayLines / caret).
+func (ed *TextEditor) WrapInnerWidth() float32 {
+	return ed.innerTextWidth(ed.editorStyle(ed.GetStyle()))
+}
+
+func (ed *TextEditor) rawInnerTextWidth() float32 {
 	pad := ed.GetStyle().Padding
 	if pad < 8 {
 		pad = 8
@@ -251,7 +257,19 @@ func (ed *TextEditor) innerTextWidth(style Style) float32 {
 	if vp := findViewport(ed); vp != nil {
 		w = vp.scrollContentWidthBudget(vp.Bounds()) - 2*pad
 	}
+	return w
+}
+
+func (ed *TextEditor) innerTextWidth(style Style) float32 {
+	_ = style
+	w := ed.rawInnerTextWidth()
 	if w < 48 {
+		// Collapsed split pane (mobile preview sheet sets editor width ~0).
+		// Remeasuring at the 48px floor wraps every few characters and grows a
+		// skyscraper AutoHeight that only a real resize used to clear.
+		if ed.wrapCacheValid && ed.wrapCacheInnerW >= 64 {
+			return ed.wrapCacheInnerW
+		}
 		w = 48
 	}
 	return w
@@ -311,6 +329,7 @@ func (ed *TextEditor) clearSelection() {
 	if ed.selAnchor >= 0 {
 		ed.selAnchor = -1
 		ed.markContentDirty()
+		ed.MarkDrawDirty()
 	}
 }
 
@@ -503,6 +522,14 @@ func (ed *TextEditor) invalidateDisplayLinesCache() {
 	ed.wrapCacheValid = false
 }
 
+// InvalidateAutoHeightMeasure clears wrap/height caches so the next Layout
+// remasures at the current width (FinishShellMount / resize settle).
+func (ed *TextEditor) InvalidateAutoHeightMeasure() {
+	ed.invalidateDisplayLinesCache()
+	ed.lastInnerW = 0
+	ed.MarkDirty()
+}
+
 func (ed *TextEditor) buildDisplayLines(text string, innerW float32, style Style) ([]string, []int) {
 	if !ed.WordWrap || innerW < 48 {
 		parts := strings.Split(text, "\n")
@@ -542,7 +569,26 @@ func (ed *TextEditor) buildDisplayLines(text string, innerW float32, style Style
 // wrapEditorLines soft-wraps a paragraph into contiguous source substrings so
 // byte offsets (caret, selection, mouse) stay aligned with the buffer.
 // Does not use strings.Fields — spaces and repeated whitespace are preserved.
+//
+// Default path measures each rune once (POD advances) then greedy-wraps. The
+// numeric wrap loop uses fx emit-C when linked; GRU_FX_WRAP=0 forces Go wrapAdvancesLines.
+// Go wrapAdvancesLines. Classic prefix-measure is the fallback only.
 func wrapEditorLines(para string, maxW float32, style Style) []string {
+	if maxW >= 8 && para != "" && !strings.Contains(para, "\n") {
+		if lines := wrapParagraphByAdvances(para, maxW, style); lines != nil {
+			return lines
+		}
+	}
+	return wrapEditorLinesClassic(para, maxW, style)
+}
+
+// WrapEditorLines is the editor wrap used by TextEditor (POD default, classic fallback).
+func WrapEditorLines(para string, maxW float32, style Style) []string {
+	return wrapEditorLines(para, maxW, style)
+}
+
+// wrapEditorLinesClassic is the O(n²) prefix-measure wrap (caret-contract reference).
+func wrapEditorLinesClassic(para string, maxW float32, style Style) []string {
 	if maxW < 8 {
 		if para == "" {
 			return nil
@@ -785,6 +831,10 @@ func (ed *TextEditor) ensureCursorVisible() {
 		pad = 8
 	}
 	if vp := findViewport(ed); vp != nil {
+		if ed.IsAutoHeight() {
+			ed.Layout()
+		}
+		vp.calculateContentHeight()
 		caretContentTop := pad + top
 		caretContentBottom := caretContentTop + lh
 		_, padT, _, padB := vp.scrollContentPadding()
@@ -803,9 +853,13 @@ func (ed *TextEditor) ensureCursorVisible() {
 		if scrollY < 0 {
 			scrollY = 0
 		}
-		if vp.ScrollY != scrollY {
+		changed := vp.ScrollY != scrollY
+		if changed {
 			vp.ScrollY = scrollY
-			vp.clampScrollY()
+		}
+		vp.calculateContentHeight()
+		vp.clampScrollY()
+		if changed {
 			vp.scrollDirty = true
 			vp.MarkDirty()
 		}
@@ -837,7 +891,7 @@ func (ed *TextEditor) ensureCursorVisible() {
 			byteStart = ed.cursor
 		}
 		prefix := text[byteStart:ed.cursor]
-		cursorX := float32(measureTextS(prefix, style))
+		cursorX := EditorMeasureWidth(prefix, style)
 		innerW := ed.innerTextWidth(ed.GetStyle()) - 4
 		if innerW < 1 {
 			innerW = 1
@@ -926,13 +980,8 @@ func (ed *TextEditor) Update(dt float32) {
 	if ed.IsHidden() {
 		return
 	}
-	ed.tickSyntaxRefresh(dt)
-	ed.tickSpellRefresh(dt)
 	mouse := rl.GetMousePosition()
 	ed.hovered = !ed.Disabled && rl.CheckCollisionPointRec(mouse, ed.Bounds())
-	// Click-to-focus runs after layout via RouteScenePointerFocus (main loop) so
-	// bounds match the latched press; do not SetFocus here — stale flex bounds
-	// break WebViewPanel handoff (§5 WEBVIEW2_HOST.md).
 	if ed.hovered != ed.lastHovered {
 		ed.lastHovered = ed.hovered
 	}
@@ -943,16 +992,21 @@ func (ed *TextEditor) Update(dt float32) {
 		ed.RestartCaretCycle()
 	}
 	ed.lastWindowFocused = winFocused
-	if winFocused {
+	if winFocused && ed.keyboardActive() {
 		ed.updateCaretTimeline(dt)
 	}
+	moving := ChromeWindowMoving()
+	if !moving {
+		ed.tickSyntaxRefresh(dt)
+		ed.tickSpellRefresh(dt)
 
-	if !ed.Disabled {
-		ed.handleHorizontalScrollbarInput()
+		if !ed.Disabled {
+			ed.handleHorizontalScrollbarInput()
+		}
 	}
 
 	wheel := rl.GetMouseWheelMove()
-	if wheel != 0 && !ed.Disabled && !ChromeWindowMoving() {
+	if wheel != 0 && !ed.Disabled && !moving {
 		style := ed.editorStyle(ed.GetStyle())
 		vp, _ := ed.horizontalScrollbarHost()
 		track, _, maxX := ed.horizScrollbarGeom(vp, style)
@@ -963,13 +1017,13 @@ func (ed *TextEditor) Update(dt float32) {
 		}
 	}
 
-	if ed.hovered && !ed.Disabled && !ScenePointerBlocked() {
+	if !moving && ed.hovered && !ed.Disabled && !ScenePointerBlocked() {
 		if rl.IsMouseButtonPressed(rl.MouseRightButton) {
 			ed.ShowContextMenuAt(mouse)
 		}
 		ed.updateMouseSelection(mouse)
 		wheel := rl.GetMouseWheelMove()
-		if wheel != 0 && !ChromeWindowMoving() {
+		if wheel != 0 {
 			style := ed.editorStyle(ed.GetStyle())
 			maxX := ed.maxScrollX(style)
 			vertScroll := false
@@ -1122,7 +1176,7 @@ func (ed *TextEditor) Update(dt float32) {
 			}
 			ed.moveHome(true)
 		}
-	} else if keyFired(rl.KeyEnter) {
+	} else if keyFired(rl.KeyEnter) || keyFired(rl.KeyKpEnter) {
 		ed.insertAtCursor("\n")
 	} else if keyFired(rl.KeyTab) {
 		ed.insertAtCursor("    ")
@@ -1135,7 +1189,8 @@ func (ed *TextEditor) Update(dt float32) {
 	if spaceFromKey {
 		before := ed.cursor
 		textBefore := ed.Text.Get()
-		ed.clearSelection()
+		// Do not clearSelection here — insertAtCursor must removeSelection first
+		// so typing replaces the highlighted range.
 		ed.trySpellAutoCorrectBeforeSpace()
 		ed.insertAtCursor(" ")
 		CaretDebugLine(
@@ -1151,7 +1206,6 @@ func (ed *TextEditor) Update(dt float32) {
 				if !spaceFromKey {
 					before := ed.cursor
 					textBefore := ed.Text.Get()
-					ed.clearSelection()
 					ed.trySpellAutoCorrectBeforeSpace()
 					ed.insertAtCursor(" ")
 					CaretDebugLine(
@@ -1162,7 +1216,6 @@ func (ed *TextEditor) Update(dt float32) {
 				char = rl.GetCharPressed()
 				continue
 			}
-			ed.clearSelection()
 			ed.insertAtCursor(string(char))
 		}
 		char = rl.GetCharPressed()
@@ -1176,34 +1229,60 @@ func (ed *TextEditor) Layout() {
 	if pad < 8 {
 		pad = 8
 	}
-	wantH := ed.contentHeight(style) + 2*pad
-	if wantH < ed.lineHeight(style)+2*pad {
-		wantH = ed.lineHeight(style) + 2*pad
-	}
-	if vp := findViewport(ed); vp != nil {
-		clip := vp.ClipBounds()
-		if ed.IsAutoHeight() {
+	lh := ed.lineHeight(style)
+	// Viewport.layoutVerticalScrollContent zeros AutoHeight height before Layout.
+	// Never skip restoring height — mid-drag early-out left the editor at h=0
+	// (blank pane until an unrelated dirty). Remeasure is cheap via wrap cache
+	// only when the wrap width still matches (stale line counts left a giant
+	// empty region under the text until the next real remasure).
+	if ed.IsAutoHeight() {
+		wantH := float32(0)
+		innerW := ed.innerTextWidth(style)
+		cacheOK := ChromeWindowMoving() && ed.wrapCacheValid && len(ed.wrapCacheLines) > 0 &&
+			absF(innerW-ed.wrapCacheInnerW) <= 0.5
+		if cacheOK {
+			wantH = float32(len(ed.wrapCacheLines))*lh + 2*pad
+		} else {
+			wantH = ed.contentHeight(style) + 2*pad
+		}
+		if wantH < lh+2*pad {
+			wantH = lh + 2*pad
+		}
+		if vp := findViewport(ed); vp != nil {
+			clip := vp.ClipBounds()
 			b := ed.Bounds()
 			changed := false
 			if b.Height < wantH-0.5 || b.Height > wantH+0.5 {
 				b.Height = wantH
 				changed = true
 			}
-			if b.Width < clip.Width-0.5 || b.Width > clip.Width+0.5 {
+			if clip.Width > 1 && (b.Width < clip.Width-0.5 || b.Width > clip.Width+0.5) {
 				b.Width = clip.Width
 				changed = true
 			}
 			if changed {
 				ed.setBoundsNoMark(b)
-				vp.MarkDirty()
+				if !ChromeWindowMoving() {
+					vp.MarkDirty()
+				}
+			}
+		} else {
+			b := ed.Bounds()
+			if b.Height < wantH-0.5 || b.Height > wantH+0.5 {
+				b.Height = wantH
+				ed.setBoundsNoMark(b)
 			}
 		}
-	} else if ed.IsAutoHeight() {
-		b := ed.Bounds()
-		if b.Height < wantH-0.5 || b.Height > wantH+0.5 {
-			b.Height = wantH
-			ed.setBoundsNoMark(b)
-		}
+	}
+	// Mid-drag: skip wrap-cache invalidation churn; Draw rewraps if inner width changed.
+	if ChromeWindowMoving() {
+		ed.layoutDirty = false
+		return
+	}
+	// Collapsed pane: keep last good wrap width; do not latch lastInnerW to ~0/48.
+	if ed.rawInnerTextWidth() < 64 {
+		ed.layoutDirty = false
+		return
 	}
 	w := ed.innerTextWidth(ed.GetStyle())
 	if ed.lastInnerW != 0 && (w > ed.lastInnerW+0.5 || w < ed.lastInnerW-0.5) {
@@ -1233,6 +1312,13 @@ func (ed *TextEditor) Draw() {
 
 	if drawStyle.BackgroundColor.A > 0 {
 		rl.DrawRectangleRec(layoutBounds, drawStyle.BackgroundColor)
+		// ClearType component-alpha needs the real opaque surface (north star).
+		bg := drawStyle.BackgroundColor
+		if int(bg.R)+int(bg.G)+int(bg.B) < 420 {
+			SetFTLCDDarkBackdrop(bg)
+		} else {
+			SetFTLCDLightBackdrop(bg)
+		}
 	}
 
 	var editorVP *Viewport
@@ -1257,6 +1343,7 @@ func (ed *TextEditor) Draw() {
 	posX := int32(layoutBounds.X) + pad - int32(ed.scrollX)
 	baseY := ed.textDrawBaseY(layoutBounds, pad)
 
+	// Selection under text (same RT). Overlay-only fill looked grey / vanished in dark mode.
 	if ed.hasSelection() {
 		ed.drawSelection(text, posX, baseY, lh, drawStyle, innerBounds)
 	}
@@ -1267,8 +1354,13 @@ func (ed *TextEditor) Draw() {
 	} else {
 		lines, starts := ed.displayLines(drawStyle)
 		first, last := ed.visibleLineRange(baseY, lh, innerBounds, len(lines))
-		// Keep prior Chroma colors outside the edited line range; plain text only on dirty lines.
 		useSyntax := ed.syntaxHighlightAllowed() && len(ed.syntaxSpans) > 0
+		selLo, selHi := ed.selectionRange()
+		editorBg := drawStyle.BackgroundColor
+		if editorBg.A == 0 {
+			editorBg = rl.NewColor(255, 255, 255, 255)
+		}
+		selBackdrop := editorSelectionOpaqueBackdrop(editorBg)
 		for i := first; i <= last; i++ {
 			line := lines[i]
 			y := int32(baseY + float32(i)*lh)
@@ -1276,16 +1368,61 @@ func (ed *TextEditor) Draw() {
 			if i < len(starts) {
 				byteStart = starts[i]
 			}
+			lineEnd := byteStart + len(line)
+			lineSelected := ed.hasSelection() && selHi > byteStart && selLo < lineEnd
+			localLo, localHi := 0, len(line)
+			if lineSelected {
+				if selLo > byteStart {
+					localLo = selLo - byteStart
+				}
+				if selHi < lineEnd {
+					localHi = selHi - byteStart
+				}
+			}
 			plainLine := ed.lineInSyntaxDirtyRange(text, byteStart)
-			if useSyntax && !plainLine {
-				length := len(line)
-				if i < len(starts) {
-					ed.drawSyntaxLine(syntaxSpansForRange(ed.syntaxSpans, starts[i], length), posX, y, drawStyle)
+			drawLine := func() {
+				if useSyntax && !plainLine {
+					ed.drawSyntaxLine(syntaxSpansForRange(ed.syntaxSpans, byteStart, len(line)), posX, y, drawStyle)
 				} else {
 					drawTextS(line, posX, y, drawStyle)
 				}
-			} else {
-				drawTextS(line, posX, y, drawStyle)
+			}
+			if !lineSelected {
+				drawLine()
+				continue
+			}
+			if localLo == 0 && localHi == len(line) {
+				pop := PushLCDSurfaceBackdrop(selBackdrop)
+				drawLine()
+				PopLCDSurfaceBackdrop(pop)
+				continue
+			}
+			// Partial line: scissor + full-line draw per band (stable spacing, correct LCD dest).
+			selH := int32(lh + 0.5)
+			x0 := float32(posX)
+			xSelLo := x0 + EditorMeasureWidth(line[:localLo], drawStyle)
+			xSelHi := x0 + EditorMeasureWidth(line[:localHi], drawStyle)
+			xEnd := x0 + EditorMeasureWidth(line, drawStyle)
+			if localLo > 0 {
+				pop := PushLCDSurfaceBackdrop(editorBg)
+				beginScissorMode(int32(x0+0.5), y, int32(xSelLo-x0+0.5), selH)
+				drawLine()
+				endNestedScissor()
+				PopLCDSurfaceBackdrop(pop)
+			}
+			{
+				pop := PushLCDSurfaceBackdrop(selBackdrop)
+				beginScissorMode(int32(xSelLo+0.5), y, int32(xSelHi-xSelLo+0.5), selH)
+				drawLine()
+				endNestedScissor()
+				PopLCDSurfaceBackdrop(pop)
+			}
+			if localHi < len(line) {
+				pop := PushLCDSurfaceBackdrop(editorBg)
+				beginScissorMode(int32(xSelHi+0.5), y, int32(xEnd-xSelHi+0.5), selH)
+				drawLine()
+				endNestedScissor()
+				PopLCDSurfaceBackdrop(pop)
 			}
 		}
 		if ed.spellCheckActive() && len(ed.spellMiss) > 0 {
@@ -1344,7 +1481,6 @@ func (ed *TextEditor) DrawInteractionOverlay() {
 		}
 	}
 	beginScissorMode(int32(innerBounds.X), int32(innerBounds.Y), int32(innerBounds.Width), int32(innerBounds.Height))
-
 	lh := ed.lineHeight(drawStyle)
 	baseY := ed.textDrawBaseY(layoutBounds, pad)
 	ed.drawCaret(drawStyle, layoutBounds, pad, baseY, lh)
@@ -1405,8 +1541,8 @@ func (ed *TextEditor) drawHorizontalScrollbar(style Style, vp *Viewport) {
 	if maxScroll <= 0 {
 		return
 	}
-	rl.DrawRectangleRounded(track, 1, 6, viewportScrollTrackColor)
-	rl.DrawRectangleRounded(thumb, 1, 6, viewportScrollThumbColor)
+	DrawRoundedFill(track, 1, viewportScrollTrackColor)
+	DrawRoundedFill(thumb, 1, viewportScrollThumbColor)
 }
 
 func (ed *TextEditor) horizontalScrollbarHost() (*Viewport, rl.Rectangle) {
@@ -1527,12 +1663,11 @@ func (ed *TextEditor) drawCaret(drawStyle Style, layoutBounds rl.Rectangle, pad 
 		spans := syntaxSpansForRange(ed.syntaxSpans, byteStart, lineLen)
 		prefixW = editorSyntaxPrefixWidth(spans, len(prefix), drawStyle)
 	} else {
-		prefixW = measureTextS(prefix, drawStyle)
+		prefixW = int32(EditorMeasureWidth(prefix, drawStyle))
 	}
 	cursorX := posX + prefixW
 	cursorY := int32(baseY + float32(vLine)*lh)
-	fs := int32(EffectiveFontSize(drawStyle))
-	rl.DrawLine(cursorX, cursorY, cursorX, cursorY+fs, ed.caretInkColor())
+	drawStyledCaret(cursorX, cursorY, drawStyle, ed.caretInkColor())
 }
 
 // SetWordWrap enables soft line wrapping to the editor inner width.
@@ -1615,7 +1750,7 @@ func (ed *TextEditor) drawSelection(text string, posX int32, baseY, lh float32, 
 		return
 	}
 	lines, starts := ed.displayLines(style)
-	fs := int32(EffectiveFontSize(style))
+	selH := int32(lh + 0.5)
 	first, last := ed.visibleLineRange(baseY, lh, clip, len(lines))
 	for i := first; i <= last; i++ {
 		line := lines[i]
@@ -1635,9 +1770,9 @@ func (ed *TextEditor) drawSelection(text string, posX int32, baseY, lh float32, 
 		if selLo >= selHi {
 			continue
 		}
-		x1 := posX + measureTextS(line[:selLo], style)
-		x2 := posX + measureTextS(line[:selHi], style)
+		x1f := float32(posX) + EditorMeasureWidth(line[:selLo], style)
+		x2f := float32(posX) + EditorMeasureWidth(line[:selHi], style)
 		y := int32(baseY + float32(i)*lh)
-		rl.DrawRectangle(x1, y, x2-x1, fs, textInputSelectionFill)
+		rl.DrawRectangle(int32(x1f+0.5), y, int32(x2f-x1f+0.5), selH, editorSelectionOpaqueBackdrop(style.BackgroundColor))
 	}
 }

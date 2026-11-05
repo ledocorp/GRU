@@ -1,6 +1,6 @@
 # Mount and borderless chrome
 
-Gru desktop apps use an **undecorated** raylib window plus a drawn **`TitleBar`**. Package `ui` exposes mount helpers so thin hosts (`cmd/hello`, `cmd/webviewhello`) match the Studio spine without copying a large main loop.
+Gru desktop apps use an **undecorated** raylib window plus a drawn **`TitleBar`**. Package `ui` exposes mount helpers so thin hosts (`cmd/hello`, `cmd/webviewhello`) follow the same borderless spine as the reference samples — without copying a large main loop.
 
 **Module:** `github.com/ledocorp/gru/ui`  
 **Sample:** `cmd/hello/main.go`
@@ -76,7 +76,7 @@ Call whenever client width/height change. Never blit an old supersampling target
 ui.SyncBorderlessClientSize(doc, titleBar, fullW, fullH)
 ```
 
-This mirrors the Studio resize path:
+This matches the borderless resize path used in `cmd/hello`:
 
 | Step | Effect |
 |------|--------|

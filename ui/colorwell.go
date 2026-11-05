@@ -150,16 +150,16 @@ func (cw *ColorWell) drawInternal() {
 	for i, col := range cw.Swatches {
 		r := cw.cellRect(i)
 		if i == sel || i == cw.hoverIdx {
-			ring := rl.NewRectangle(r.X-colorWellRingPad, r.Y-colorWellRingPad,
-				r.Width+colorWellRingPad*2, r.Height+colorWellRingPad*2)
+			ring := snapControlRect(rl.NewRectangle(r.X-colorWellRingPad, r.Y-colorWellRingPad,
+				r.Width+colorWellRingPad*2, r.Height+colorWellRingPad*2))
 			rc := rl.NewColor(79, 70, 229, 255)
 			if i == cw.hoverIdx && i != sel {
 				rc.A = 180
 			}
-			rl.DrawRectangleRounded(ring, 0.25, 6, rc)
+			// Match swatch roundness (was square LinesEx — C8/C11).
+			pageFill := rl.NewColor(248, 249, 252, 255)
+			DrawRoundedTessInsetBorder(ring, 0.2, 1, rc, pageFill)
 		}
-		rl.DrawRectangleRounded(r, 0.2, 6, col)
-		bc := rl.NewColor(0, 0, 0, 40)
-		rl.DrawRectangleRoundedLinesEx(r, 0.2, 6, 1, bc)
+		drawRoundedInsetBorder(r, 0.2, 1, rl.NewColor(0, 0, 0, 40), col)
 	}
 }

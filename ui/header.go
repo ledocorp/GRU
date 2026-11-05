@@ -87,19 +87,32 @@ func (h *Header) textWidth(bounds rl.Rectangle, pad float32) float32 {
 }
 
 func headerTextBlockHeight(text string, style Style, maxW float32, wrap bool) float32 {
-	fs := EffectiveFontSize(style)
+	box := headerLineBoxHeight(style)
 	if text == "" {
 		return 0
 	}
 	if !wrap || maxW < 24 {
-		return fs
+		return box
 	}
 	lines := wrapLabelLines(text, maxW, style)
 	if len(lines) == 0 {
-		return fs
+		return box
 	}
 	const lineGap = headerWrappedLineGap
-	return float32(len(lines))*fs + float32(len(lines)-1)*lineGap
+	return float32(len(lines))*box + float32(len(lines)-1)*lineGap
+}
+
+// headerLineBoxHeight is layout line height for ClearType ink (ascent + descender pad).
+// Using Em size alone clipped capital tops after DWrite strikes (user dogfood).
+func headerLineBoxHeight(style Style) float32 {
+	fs := EffectiveFontSize(style)
+	ink := TextInkHeight(style)
+	h := ink
+	if h < fs {
+		h = fs
+	}
+	// Descenders (y, g, p) + small top pad for LCD overshoot past the em box.
+	return h + fs*0.40
 }
 
 // headerIntrinsicHeight returns the layout height for title + optional subtitle at width.
@@ -145,16 +158,16 @@ func (h *Header) Layout() {
 func (h *Header) Draw() { h.drawInternal() }
 
 func (h *Header) drawHeaderLines(text string, style Style, x int32, y int32, maxW float32, wrap bool) int32 {
-	fs := int32(EffectiveFontSize(style))
+	box := int32(headerLineBoxHeight(style))
 	const lineGap = int32(headerWrappedLineGap)
 	if !wrap || maxW < 24 {
 		drawTextS(text, x, y, style)
-		return y + fs
+		return y + box
 	}
 	lines := wrapLabelLines(text, maxW, style)
 	for i, line := range lines {
 		drawTextS(line, x, y, style)
-		y += fs
+		y += box
 		if i < len(lines)-1 {
 			y += lineGap
 		}
@@ -174,6 +187,8 @@ func (h *Header) drawInternal() {
 	if style.BackgroundColor.A > 0 {
 		rl.DrawRectangleRec(b, style.BackgroundColor)
 	}
+	popLCD := PushLCDSurfaceBackdrop(style.BackgroundColor)
+	defer PopLCDSurfaceBackdrop(popLCD)
 
 	textX := int32(b.X) + int32(headerTextInset)
 	if h.AccentBar {
@@ -184,16 +199,19 @@ func (h *Header) drawInternal() {
 
 	maxW := h.textWidth(b, pad)
 	subStyle := h.headerSubtitleStyle(style)
-	titleFS := EffectiveFontSize(style)
+	titleBox := headerLineBoxHeight(style)
 
 	var blockH int32
 	if h.Subtitle == "" {
-		blockH = int32(titleFS)
+		blockH = int32(titleBox)
 	} else {
 		subH := int32(headerTextBlockHeight(h.Subtitle, subStyle, maxW, h.WrapSubtitle))
-		blockH = int32(titleFS) + int32(headerTitleSubtitleGap) + subH
+		blockH = int32(titleBox) + int32(headerTitleSubtitleGap) + subH
 	}
 	startY := int32(b.Y) + (int32(b.Height)-blockH)/2
+	if startY < int32(b.Y)+int32(pad) {
+		startY = int32(b.Y) + int32(pad)
+	}
 
 	clip := b
 	if h.WrapSubtitle && h.Subtitle != "" {

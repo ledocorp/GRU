@@ -40,6 +40,12 @@ func collectInteractionOverlayWake(n Node, out *WakeSummary) {
 
 // DrawInteractionOverlays paints transient interaction chrome after the cached UI
 // blit. Uses screen-space scissor when the widget sits inside a viewport.
+//
+// Overlay labels must sit on opaque chrome painted in this pass (same recipe as
+// the Studio footer). Redrawing only a glyph over the main blit (hovered
+// segmented label, ghost icon) uses the wrong LCD dest and looks muddy/doubled.
+// Prefer InvalidatePaint + main-RT redraw, or fill the plate first.
+// docs/PRESENT_1X_COMPOSITE.md §4.
 func DrawInteractionOverlays(root Node) {
 	drawInteractionOverlays(root)
 }

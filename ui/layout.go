@@ -121,6 +121,22 @@ func markDrawDirtyNode(n Node) {
 	}
 }
 
+// ScheduleLayoutPass marks layoutDirty on n without bubbling to ancestors.
+// Prefer this inside Layout() follow-up passes — MarkDirty on a child re-dirties
+// the parent that just cleared layoutDirty and pins NeedsRedraw forever.
+func ScheduleLayoutPass(n Node) { scheduleLayoutPass(n) }
+
+// ClearLayoutDirty clears layoutDirty on n without walking children or bubbling.
+// Use for mid-drag early-outs that must satisfy the Layout contract.
+func ClearLayoutDirty(n Node) {
+	if n == nil {
+		return
+	}
+	if el := nodeElementPtrForResize(n); el != nil {
+		el.layoutDirty = false
+	}
+}
+
 // scheduleLayoutPass marks layoutDirty on n without bubbling to ancestors.
 func scheduleLayoutPass(n Node) {
 	switch v := n.(type) {
@@ -1066,8 +1082,9 @@ func viewportScrollRecovering() bool {
 	return viewportScrollRecoveryFrames > 0
 }
 
-// InvalidateAutoHeightTextMeasures clears intrinsic-height caches on Labels and
-// RichText so the next layout pass remeasures at the flex-assigned cell width.
+// InvalidateAutoHeightTextMeasures clears intrinsic-height caches on Labels,
+// RichText, and AutoHeight TextEditors so the next layout pass remasures at the
+// flex-assigned cell width (FinishShellMount / resize settle).
 func InvalidateAutoHeightTextMeasures(root Node) {
 	var walk func(Node)
 	walk = func(n Node) {
@@ -1080,6 +1097,9 @@ func InvalidateAutoHeightTextMeasures(root Node) {
 		}
 		if rt, ok := n.(*RichText); ok && rt.IsAutoHeight() {
 			rt.InvalidateAutoHeightMeasure()
+		}
+		if ed, ok := n.(*TextEditor); ok && ed.IsAutoHeight() {
+			ed.InvalidateAutoHeightMeasure()
 		}
 		for _, ch := range n.Children() {
 			walk(ch)
@@ -1233,6 +1253,11 @@ func deepHasWheelConsumer(nodes []Node, mouse rl.Vector2, wheel float32) bool {
 		}
 		if tb, ok := n.(*Toolbar); ok && wheel != 0 && tb.absorbsRibbonWheel(mouse) {
 			return true
+		}
+		if vp, ok := n.(*Viewport); ok && vp.Orientation == ScrollHorizontal && vp.overflowScrollX() > 0 {
+			if lim, ok := n.(wheelScrollLimiter); ok && lim.AbsorbsParentWheel(wheel) {
+				return true
+			}
 		}
 		if _, isVP := n.(*Viewport); !isVP {
 			if wc, ok := n.(wheelConsumer); ok && wc.HandlesWheelScroll() {

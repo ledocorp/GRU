@@ -4,18 +4,15 @@ package examples
 import "github.com/ledocorp/gru/ui"
 
 // PreloadSceneIcons warms Remix icon-font glyphs used by shell and form demos.
+// Packs each weight in one atlas rebuild (see ui.IconRegistry.EnsureLoadedMany).
 func PreloadSceneIcons(doc *ui.Document) {
 	ui.Icons.PreloadShellIcons(doc)
-	for _, n := range ui.WarmGlyphNames {
-		ui.Icons.EnsureLoaded(n, ui.IconRegular)
-	}
-	for _, n := range batch9ToolbarGlyphs {
-		ui.Icons.EnsureLoaded(n, ui.IconRegular)
-	}
-	ui.Icons.EnsureLoaded(ui.IconPlus, ui.IconFill)
-	ui.Icons.EnsureLoaded(ui.IconStar, ui.IconFill)
-	ui.Icons.EnsureLoaded(ui.IconXCircle, ui.IconRegular)
-	ui.Icons.EnsureLoaded(ui.IconX, ui.IconRegular)
+	names := make([]string, 0, len(ui.WarmGlyphNames)+len(batch9ToolbarGlyphs)+4)
+	names = append(names, ui.WarmGlyphNames...)
+	names = append(names, batch9ToolbarGlyphs...)
+	names = append(names, ui.IconPlus, ui.IconStar, ui.IconXCircle, ui.IconX)
+	ui.Icons.EnsureLoadedMany(names, ui.IconRegular)
+	ui.Icons.EnsureLoadedMany([]string{ui.IconPlus, ui.IconStar}, ui.IconFill)
 }
 
 // Deprecated: use PreloadSceneIcons.

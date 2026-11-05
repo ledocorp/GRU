@@ -28,6 +28,9 @@ func TestPhosphorFontTTFPath(t *testing.T) {
 }
 
 func TestPhosphorFontDrawSize(t *testing.T) {
+	prev := BaseSupersamplingScale
+	t.Cleanup(func() { BaseSupersamplingScale = prev })
+	BaseSupersamplingScale = 2 // Path A-like — no sticky quantize
 	dst := rl.NewRectangle(10, 20, 48, 40)
 	if got := phosphorFontDrawSize(dst); got != 40 {
 		t.Fatalf("size = %v, want 40 (min of w/h)", got)
@@ -46,9 +49,45 @@ func TestPhosphorIconFontSummaryNoTTF(t *testing.T) {
 }
 
 func TestPhosphorFontDrawSizeNo40Cap(t *testing.T) {
+	prev := BaseSupersamplingScale
+	t.Cleanup(func() { BaseSupersamplingScale = prev })
+	BaseSupersamplingScale = 2
 	dst := rl.NewRectangle(0, 0, 56, 56)
 	got := phosphorFontDrawSize(dst)
 	if got <= 40 {
 		t.Fatalf("expected sizes above legacy 40px cap to pass through, got %v", got)
+	}
+}
+
+func TestQuantizeIconDrawSizeSticky(t *testing.T) {
+	// Bias favors larger sticky: 19 → 20 (not 18).
+	if got := quantizeIconDrawSize(19); got != 20 {
+		t.Fatalf("19 → %v, want sticky 20 (larger bias)", got)
+	}
+	if got := quantizeIconDrawSize(24); got != 24 {
+		t.Fatalf("exact 24 → %v", got)
+	}
+	prev := BaseSupersamplingScale
+	t.Cleanup(func() { BaseSupersamplingScale = prev })
+	BaseSupersamplingScale = 1
+	dst := rl.NewRectangle(0, 0, 19, 19)
+	got := phosphorFontDrawSize(dst)
+	if got != 20 {
+		t.Fatalf("SSAA1× draw size for 19px slot = %v, want sticky 20", got)
+	}
+}
+
+func TestIconStrikeWarmSizesOnLadder(t *testing.T) {
+	for _, sz := range iconStrikeWarmSizes {
+		found := false
+		for _, s := range stickyIconDrawSizes {
+			if int32(s) == sz {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("warm strike size %d not on stickyIconDrawSizes", sz)
+		}
 	}
 }

@@ -184,6 +184,8 @@ func (ed *TextEditor) removeSelection() bool {
 	ed.setText(text[:lo] + text[hi:])
 	ed.cursor = lo
 	ed.selAnchor = -1
+	ed.markContentDirty()
+	ed.MarkDrawDirty()
 	ed.ensureCursorVisible()
 	return true
 }

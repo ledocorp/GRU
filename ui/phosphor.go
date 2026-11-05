@@ -182,11 +182,21 @@ func (r *IconRegistry) Available(name string, weight IconWeight) bool {
 }
 
 // EnsureLoaded warms the Remix font subset. Safe from Draw / preload.
+// Prefer [EnsureLoadedMany] when warming a list — each new glyph otherwise
+// rebuilds the full icon atlas (very expensive at startup).
 func (r *IconRegistry) EnsureLoaded(name string, weight IconWeight) bool {
 	if !remixHasGlyph(name, weight) {
 		return false
 	}
 	return remixEnsureGlyph(name, weight)
+}
+
+// EnsureLoadedMany packs all listed glyphs in one atlas rebuild.
+func (r *IconRegistry) EnsureLoadedMany(names []string, weight IconWeight) bool {
+	if len(names) == 0 {
+		return true
+	}
+	return remixEnsureGlyphs(names, weight)
 }
 
 // DrawChrome renders shell chrome icons (Remix font).
@@ -233,14 +243,13 @@ func (r *IconRegistry) PreloadAsync(doc *Document, names []string, weight IconWe
 // PreloadShellIcons warms Remix glyphs used by app chrome and demos.
 // Prefer calling after mount via QueueMain so startup stays lean; Studio may
 // call this once after InitDisplayAwareAtlases when IconsEagerWarm was false.
+// Glyphs are packed in one atlas rebuild per weight (not N rebuilds).
 func (r *IconRegistry) PreloadShellIcons(doc *Document) {
 	warm := func() {
 		for _, w := range []IconWeight{IconRegular, IconFill} {
-			for _, n := range WarmGlyphNames {
-				remixEnsureGlyph(n, w)
-			}
+			_ = remixEnsureGlyphs(WarmGlyphNames, w)
 		}
-		r.EnsureLoaded(IconPlus, IconRegular)
+		_ = remixEnsureGlyphs([]string{IconPlus}, IconRegular)
 		if doc != nil {
 			doc.InvalidatePaint()
 		}
@@ -285,7 +294,7 @@ func snapPhosphorRect(r rl.Rectangle) rl.Rectangle {
 
 // phosphorIconSize picks a draw size for chrome icons inside a square slot.
 func phosphorIconSize(slot float32, styleFontSize int32) float32 {
-	size := slot * 0.62
+	size := slot * 0.72
 	if size < 24 {
 		size = 24
 	}

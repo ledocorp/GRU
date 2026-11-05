@@ -6,11 +6,17 @@ import (
 
 // T1.9 — DPR-scaled source atlases (SDF text + Remix icons). Layout stays logical;
 // FlagWindowHighdpi remains off. SSAA is not multiplied by DisplayScale.
+//
+// Important: do **not** grow atlases when SSAA drops. Lean/GRU_SSAA=1 must shrink
+// the framebuffer RT, not inflate SDF/Remix (that caused WS ↑ while quality ↓).
 
 const (
 	SDFAtlasBasePx   int32 = 176
 	RemixAtlasBasePx int32 = 512
 	BitmapFontBasePx int32 = 176
+	// FTGreyAtlasBasePx — single greyscale atlas (~48×DPI). Keep lean for WS;
+	// exact-size strikes are opt-in (GRU_TEXT_STRIKES=1), not denser default bake.
+	FTGreyAtlasBasePx int32 = 48
 )
 
 var atlasForDisplayScale float32
@@ -51,13 +57,39 @@ func EffectiveRemixAtlasSize() int32 { return scaleAtlasPx(RemixAtlasBasePx) }
 // EffectiveBitmapFontAtlasSize returns the bitmap UI font fallback atlas size.
 func EffectiveBitmapFontAtlasSize() int32 { return scaleAtlasPx(BitmapFontBasePx) }
 
-// InitDisplayAwareAtlases loads bitmap, Remix, and SDF atlases scaled by [DisplayScale].
+// EffectiveFTGreyAtlasSize is the greyscale Latin bake size (~48×DPI).
+func EffectiveFTGreyAtlasSize() int32 { return scaleAtlasPx(FTGreyAtlasBasePx) }
+
+// InitDisplayAwareAtlases loads icon + text atlases scaled by [DisplayScale].
+// When ft-grey is preferred and init succeeds, skip SDF + full bitmap atlases (GRP-7).
 // Call after [RefreshDisplayScale] and rl.InitWindow.
 func InitDisplayAwareAtlases() {
+	ApplyRenderQualityFromEnv()
 	RefreshDisplayScale()
 	atlasForDisplayScale = DisplayScale
-	InitFonts(EffectiveBitmapFontAtlasSize())
 	InitIcons(EffectiveRemixAtlasSize())
+	if LoadedUIFontPath == "" {
+		LoadedUIFontPath = firstExisting(resolvedFontCandidates()...)
+	}
+	if PreferMSDFChrome() && InitMSDFFont(EffectiveFTGreyAtlasSize()) {
+		return
+	}
+	// S1: ft-grey (+ exact strikes) first — LCD shader/strikes attach on top.
+	// Classic LCD-only (no strikes) keeps the single scaled LCD atlas path.
+	if PreferFTGreyStrikes() && PreferFTGreyChrome() && InitFTGreyFont(EffectiveFTGreyAtlasSize()) {
+		if PreferFTLCDChrome() {
+			_ = ensureFTLCDShader()
+		}
+		InitS1AuxFonts()
+		return
+	}
+	if PreferFTLCDChrome() && InitFTLCDFont(EffectiveFTGreyAtlasSize()) {
+		return
+	}
+	if PreferFTGreyChrome() && InitFTGreyFont(EffectiveFTGreyAtlasSize()) {
+		return
+	}
+	InitFonts(EffectiveBitmapFontAtlasSize())
 	InitSDFFont(EffectiveSDFAtlasSize())
 }
 
@@ -78,9 +110,25 @@ func reinitDisplayAwareAtlases() {
 	Icons.UnloadAll()
 	unloadShapedFonts()
 
-	InitFonts(EffectiveBitmapFontAtlasSize())
 	InitIcons(EffectiveRemixAtlasSize())
-	InitSDFFont(EffectiveSDFAtlasSize())
+	if LoadedUIFontPath == "" {
+		LoadedUIFontPath = firstExisting(resolvedFontCandidates()...)
+	}
+	if PreferMSDFChrome() && InitMSDFFont(EffectiveFTGreyAtlasSize()) {
+		// ok
+	} else if PreferFTGreyStrikes() && PreferFTGreyChrome() && InitFTGreyFont(EffectiveFTGreyAtlasSize()) {
+		if PreferFTLCDChrome() {
+			_ = ensureFTLCDShader()
+		}
+		InitS1AuxFonts()
+	} else if PreferFTLCDChrome() && InitFTLCDFont(EffectiveFTGreyAtlasSize()) {
+		// ok
+	} else if PreferFTGreyChrome() && InitFTGreyFont(EffectiveFTGreyAtlasSize()) {
+		// ok
+	} else {
+		InitFonts(EffectiveBitmapFontAtlasSize())
+		InitSDFFont(EffectiveSDFAtlasSize())
+	}
 
 	SetTextEngineMode(mode)
 	shapedLatinMeasureActive = latin

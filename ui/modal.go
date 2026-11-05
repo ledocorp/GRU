@@ -439,7 +439,7 @@ func (m *modalManager) Draw() {
 		xClr = rl.NewColor(45, 48, 62, tbA)
 		drawTitleBarButtonHover(xRect, rl.NewColor(228, 230, 242, tbA))
 	}
-	drawTitleBarChromeIcon(xRect, RemixClose, xClr, 1.15, titleBarIconStrokeThin)
+	drawTitleBarChromeIcon(xRect, RemixClose, xClr, 1.0, titleBarIconStroke)
 
 	// ── Content area (hidden during close animation to avoid ghost text) ──────
 	if m.content != nil && !m.host.Closing {
@@ -478,11 +478,9 @@ func (m *modalManager) Draw() {
 				bgC = rl.ColorBrightness(bgC, 0.15)
 			}
 			bgC.A = uint8(float32(bgC.A) * a)
-			rl.DrawRectangleRounded(br, 0.3, 6, bgC)
-
 			bbc := bs.BorderColor
 			bbc.A = uint8(float32(bbc.A) * a)
-			rl.DrawRectangleRoundedLinesEx(br, 0.3, 6, 1, bbc)
+			DrawRoundedInsetBorder(br, 0.3, 1, bbc, bgC)
 
 			ls := bs
 			ls.FontSize = 18
@@ -492,7 +490,7 @@ func (m *modalManager) Draw() {
 			ltc := ls.TextColor
 			ltc.A = uint8(float32(ltc.A) * a)
 			ls.TextColor = ltc
-			drawTextS(btn.Label, int32(bx)+int32(modalBtnW/2)-lw/2, TextPosY(br, ls), ls)
+			drawTextS(btn.Label, int32(bx)+int32(modalBtnW/2)-lw/2, toolbarTextPosY(br, ls), ls)
 		}
 	}
 }

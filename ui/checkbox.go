@@ -203,20 +203,26 @@ func (c *Checkbox) drawInternal() {
 	borderCol := style.BorderColor
 	fillCol := style.BackgroundColor
 	if c.Value.Get() {
-		borderCol = fillCol
+		// Checked: coverage fill (smooth corners) — tess punch left a faceted
+		// dark rim against the page when borderCol == fillCol.
+		if roundness > 0 {
+			DrawRoundedFill(bounds, roundness, fillCol)
+		} else {
+			rl.DrawRectangleRec(bounds, fillCol)
+		}
+	} else {
+		drawRoundedInsetBorder(bounds, roundness, bw, borderCol, fillCol)
 	}
-
-	drawRoundedInsetBorder(bounds, roundness, bw, borderCol, fillCol)
 
 	inner := rl.NewRectangle(bounds.X+bw, bounds.Y+bw, bounds.Width-2*bw, bounds.Height-2*bw)
 	if c.Value.Get() {
-		pad := inner.Width * 0.13
+		pad := inner.Width * 0.14
 		iconSize := inner.Width - 2*pad
 		if iconSize < 8 {
 			iconSize = 8
 		}
 		dst := rl.NewRectangle(inner.X+pad, inner.Y+pad, iconSize, iconSize)
-		DrawPhosphorIcon(dst, PhosphorCheck, PhosphorBold, style.TextColor)
+		DrawPhosphorIcon(dst, PhosphorCheck, PhosphorRegular, style.TextColor)
 	}
 }
 

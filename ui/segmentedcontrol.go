@@ -134,8 +134,12 @@ func (sc *SegmentedControl) drawInternal() {
 			roundness = 1
 		}
 	}
-	// Outer track only — segments are flat regions inside (no per-cell rounding).
-	rl.DrawRectangleRounded(inner, roundness, 8, trackStyle.BackgroundColor)
+	// Outer track — tess fill (hairline AA fringe left dark arcs outside the pill).
+	if roundness > 0 {
+		rl.DrawRectangleRounded(inner, roundness, 64, trackStyle.BackgroundColor)
+	} else {
+		rl.DrawRectangleRec(inner, trackStyle.BackgroundColor)
+	}
 
 	sel := sc.Selected.Get()
 	if sel < 0 {
@@ -144,6 +148,7 @@ func (sc *SegmentedControl) drawInternal() {
 	if sel >= len(sc.Options) {
 		sel = len(sc.Options) - 1
 	}
+	pillFill := rl.NewColor(255, 255, 255, 255)
 	if len(sc.Options) > 0 {
 		pill := sc.segmentBounds(sel)
 		pillPad := float32(2)
@@ -154,22 +159,31 @@ func (sc *SegmentedControl) drawInternal() {
 		if pill.Height < 1 {
 			pill.Height = 1
 		}
-		pillRound := float32(0.28)
-		if pill.Height > 0 {
-			pillRound = (pill.Height * 0.28) / (pill.Height / 2)
+		// Match track end-cap curvature so the selected pill sits cleanly inside.
+		pillRound := roundness
+		if pill.Height > 0 && pill.Height < inner.Height {
+			pillRound = (pill.Height * 0.5) / (pill.Height / 2)
 			if pillRound > 1 {
 				pillRound = 1
 			}
+			if roundness < pillRound {
+				pillRound = roundness
+			}
 		}
-		rl.DrawRectangleRounded(pill, pillRound, 6, rl.NewColor(255, 255, 255, 255))
+		if pillRound > 0 {
+			rl.DrawRectangleRounded(pill, pillRound, 64, pillFill)
+		} else {
+			rl.DrawRectangleRec(pill, pillFill)
+		}
 	}
 
 	for i, opt := range sc.Options {
 		seg := sc.segmentBounds(i)
 		labelStyle := trackStyle
+		dest := trackStyle.BackgroundColor
 		if i == sel {
-			labelStyle.Bold = true
 			labelStyle.TextColor = rl.NewColor(30, 27, 75, 255)
+			dest = pillFill
 		} else {
 			labelStyle.TextColor = rl.NewColor(90, 94, 118, 255)
 		}
@@ -178,8 +192,10 @@ func (sc *SegmentedControl) drawInternal() {
 		}
 		tw := measureTextS(opt, labelStyle)
 		tx := int32(seg.X + (seg.Width-float32(tw))/2)
-		ty := TextPosY(seg, labelStyle)
+		ty := controlTextPosY(seg, labelStyle)
+		popLCD := PushLCDSurfaceBackdrop(dest)
 		drawTextS(opt, tx, ty, labelStyle)
+		PopLCDSurfaceBackdrop(popLCD)
 	}
 	_ = b
 }
@@ -193,7 +209,8 @@ func (sc *SegmentedControl) InteractionOverlayActive() bool {
 	return sc.hoverIdx != sel
 }
 
-// DrawInteractionOverlay repaints the hovered unselected segment label.
+// DrawInteractionOverlay paints a hover pill matching the selected segment
+// (PRESENT_1X_COMPOSITE — do not scissor the full track; that left an uneven wrap).
 func (sc *SegmentedControl) DrawInteractionOverlay() {
 	if !sc.InteractionOverlayActive() {
 		return
@@ -203,14 +220,37 @@ func (sc *SegmentedControl) DrawInteractionOverlay() {
 		return
 	}
 	trackStyle, _ := sc.ResolveStyle(StyleStateNone)
+	if trackStyle.BackgroundColor.A == 0 {
+		trackStyle.BackgroundColor = rl.NewColor(235, 237, 245, 255)
+	}
+	seg := sc.segmentBounds(i)
+	pillPad := float32(2)
+	pill := rl.NewRectangle(seg.X+pillPad, seg.Y+pillPad, seg.Width-2*pillPad, seg.Height-2*pillPad)
+	if pill.Width < 1 {
+		pill.Width = 1
+	}
+	if pill.Height < 1 {
+		pill.Height = 1
+	}
+	pillRound := float32(1)
+	if pill.Height > 0 {
+		pillRound = (pill.Height * 0.5) / (pill.Height / 2)
+		if pillRound > 1 {
+			pillRound = 1
+		}
+	}
+	hoverFill := rl.NewColor(255, 255, 255, 220)
+	rl.DrawRectangleRounded(pill, pillRound, 64, hoverFill)
+
 	labelStyle := trackStyle
 	labelStyle.TextColor = rl.NewColor(55, 58, 78, 255)
 	if labelStyle.FontSize <= 0 {
 		labelStyle.FontSize = 14
 	}
-	seg := sc.segmentBounds(i)
+	popLCD := PushLCDSurfaceBackdrop(hoverFill)
 	tw := measureTextS(sc.Options[i], labelStyle)
 	tx := int32(seg.X + (seg.Width-float32(tw))/2)
-	ty := TextPosY(seg, labelStyle)
+	ty := controlTextPosY(seg, labelStyle)
 	drawTextS(sc.Options[i], tx, ty, labelStyle)
+	PopLCDSurfaceBackdrop(popLCD)
 }

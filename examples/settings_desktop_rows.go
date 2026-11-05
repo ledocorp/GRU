@@ -37,9 +37,17 @@ func settingsFlatComboRow(id, title, subtitle string, icon string, cb *ui.ComboB
 func settingsFlatDropdownRow(id, title, subtitle string, icon string, dd *ui.Dropdown) *ui.ListTile {
 	tile := ui.NewListTile(id, title, subtitle, 0, 0, 0, 0)
 	tile.SetLeading(settingsRowIcon(id+"-icon", icon))
-	dd.SetStyle("toolbar-menu")
-	dd.PreferredWidth = 168
-	dd.MaxWidth = 168
+	dd.SetStyle("toolbar-menu-value")
+	// Type size only — never bake TextColor (appearance must restyle on light/dark).
+	if typo := ui.GetThemeStyle("list-tile"); typo.FontSize > 0 {
+		dd.SetStyleOverrides(ui.Style{
+			FontSize:      typo.FontSize,
+			FontDensity:   typo.FontDensity,
+			NoCaptionBold: typo.NoCaptionBold,
+		})
+	}
+	dd.PreferredWidth = 180
+	dd.MaxWidth = 180
 	dd.MinWidth = 120
 	tile.SetTrailing(dd)
 	return tile
@@ -55,10 +63,11 @@ func settingsPageTitleRow(id, title string, onBack func()) *ui.Container {
 	row.SetStyle("transparent")
 
 	ui.Phosphor.EnsureLoaded(ui.PhosphorCaretLeft, ui.PhosphorRegular)
-	back := ui.NewIconButton(id+"-back", "", "", 0, 0, 36, 36)
+	back := ui.NewIconButton(id+"-back", "", "", 0, 0, 44, 44)
 	back.SetStyle("appbar-icon")
 	back.SetPhosphorIcon(ui.PhosphorCaretLeft, ui.PhosphorRegular)
 	back.OnClick = onBack
+	ui.SetTooltip(back, "Back to editor")
 	row.AddChild(back)
 
 	lbl := ui.NewLabel(id+"-title", title, 0, 0, 0, 0)
@@ -83,4 +92,3 @@ func settingsSection(id, title string) *ui.Container {
 	wrap.AddChild(lbl)
 	return wrap
 }
-

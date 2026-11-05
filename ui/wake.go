@@ -180,6 +180,16 @@ func (t *ResizeHoldTracker) KeepActiveFPS(now time.Time) bool {
 	return now.Sub(t.lastActivity) < ResizeIdleCooldown
 }
 
+// ClampTargetFPSForResizeHold keeps ActiveFPS while KeepActiveFPS is true.
+// Post-burst cooldown and unfocused/one-shot DeepIdle overrides must not drop
+// to 10 FPS mid-resize (F7: "UNEXPECTED drop while resizeHoldActive=true").
+func ClampTargetFPSForResizeHold(targetFPS int, resizeHoldActive bool) int {
+	if resizeHoldActive && targetFPS < ActiveFPS {
+		return ActiveFPS
+	}
+	return targetFPS
+}
+
 // RecentActivity reports whether a resize happened recently (for heavy-frame extension).
 func (t *ResizeHoldTracker) RecentActivity(now time.Time) bool {
 	if t == nil || t.lastDimChange.IsZero() {

@@ -8,7 +8,37 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
-var textInputSelectionFill = rl.NewColor(79, 70, 229, 60)
+var textInputSelectionFill = rl.NewColor(79, 70, 229, 90)
+
+// editorSelectionFill returns a selection band that stays visible on light and dark
+// editor surfaces. Low-alpha indigo over dark text reads as grey / invisible.
+func editorSelectionFill(editorBg rl.Color) rl.Color {
+	if int(editorBg.R)+int(editorBg.G)+int(editorBg.B) < 420 {
+		return rl.NewColor(129, 140, 248, 120)
+	}
+	return textInputSelectionFill
+}
+
+// editorSelectionOpaqueBackdrop composites editorSelectionFill over the editor surface
+// to an opaque RGB for ClearType LCD (same recipe as toolbarCellOpaqueBackdrop).
+func editorSelectionOpaqueBackdrop(editorBg rl.Color) rl.Color {
+	sel := editorSelectionFill(editorBg)
+	if sel.A == 0 {
+		return editorBg
+	}
+	bg := editorBg
+	if bg.A == 0 {
+		bg = rl.NewColor(255, 255, 255, 255)
+	}
+	a := float32(sel.A) / 255
+	inv := 1 - a
+	return rl.NewColor(
+		uint8(float32(bg.R)*inv+float32(sel.R)*a),
+		uint8(float32(bg.G)*inv+float32(sel.G)*a),
+		uint8(float32(bg.B)*inv+float32(sel.B)*a),
+		255,
+	)
+}
 
 func textInputCtrlDown() bool {
 	return rl.IsKeyDown(rl.KeyLeftControl) || rl.IsKeyDown(rl.KeyRightControl)

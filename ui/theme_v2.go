@@ -276,7 +276,7 @@ func docMutedCardStyle() Style {
 		Padding:         DocMarkdownCardPadding,
 		BorderWidth:     1,
 		BorderColor:     rl.NewColor(210, 214, 222, 255),
-		CornerRadius:    8,
+		CornerRadius:    10,
 	}
 }
 
@@ -291,7 +291,7 @@ func darkDocMutedCardStyle() Style {
 		Padding:         DocMarkdownCardPadding,
 		BorderWidth:     1,
 		BorderColor:     rl.NewColor(64, 68, 84, 255),
-		CornerRadius:    8,
+		CornerRadius:    10,
 	}
 }
 

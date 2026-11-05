@@ -17,7 +17,17 @@ var (
 )
 
 func sdfMeasureCacheFlags(bold, italic, mono, preview bool) uint8 {
-	return shapedMeasureCacheFlags(bold, italic, mono, preview)
+	f := shapedMeasureCacheFlags(bold, italic, mono, preview)
+	if msdfActive(mono, preview) {
+		f |= 1 << 5
+	}
+	if ftLCDActive(mono, preview) {
+		f |= 1 << 6
+	}
+	if ftGreyActive(mono, preview) {
+		f |= 1 << 4
+	}
+	return f
 }
 
 func sdfMeasureCacheLookup(key sdfMeasureCacheKey) (float32, bool) {

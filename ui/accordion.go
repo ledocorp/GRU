@@ -367,13 +367,13 @@ func (a *Accordion) drawOpenPanelChrome() {
 	shell := rl.NewRectangle(bounds.X, bounds.Y, bounds.Width, totalH)
 	bodyBg := bodySt.BackgroundColor
 
-	// Header strip: rounded top, square bottom (matches panel title-band geometry).
+	// Header: full-width flat-bottom band. Hover simply swaps to grey (no inset/tess layers).
 	headerFill := rl.NewRectangle(bounds.X, bounds.Y, bounds.Width, a.TitleHeight)
-	drawFlatBottomChromeFill(headerFill, r, headerSt.BackgroundColor)
+	headerCol := headerSt.BackgroundColor
 	if a.hoverHeader {
-		hoverRect := rl.NewRectangle(bounds.X, bounds.Y, bounds.Width, a.TitleHeight)
-		rl.DrawRectangleRec(hoverRect, rl.NewColor(0, 0, 0, 10))
+		headerCol = accordionHoverGrey
 	}
+	drawFlatBottomChromeFill(headerFill, r, headerCol)
 
 	// Body band: flat top at the divider, rounded bottom cap on the shell.
 	if a.animH > 0 {
@@ -457,13 +457,11 @@ func (a *Accordion) drawCollapsedChrome() {
 	roundness := accordionRoundness(bounds.Width, a.TitleHeight, r)
 	totalRect := rl.NewRectangle(bounds.X, bounds.Y, bounds.Width, a.TitleHeight)
 
+	fill := headerStyle.BackgroundColor
 	if a.hoverHeader {
-		drawAccordionHeaderBand(bounds, a.TitleHeight, roundness, false, headerStyle.BackgroundColor)
-		hover := rl.NewColor(0, 0, 0, 14)
-		drawAccordionHeaderBand(bounds, a.TitleHeight, roundness, false, hover)
-	} else {
-		drawAccordionHeaderBand(bounds, a.TitleHeight, roundness, false, headerStyle.BackgroundColor)
+		fill = accordionHoverGrey
 	}
+	drawAccordionHeaderBand(bounds, a.TitleHeight, roundness, false, fill)
 
 	pad := headerStyle.Padding
 	if pad == 0 {
@@ -493,6 +491,9 @@ func (a *Accordion) drawCollapsedChrome() {
 	}
 }
 
+// accordionHoverGrey replaces the open/collapsed header fill on hover (simple swap — C18).
+var accordionHoverGrey = rl.NewColor(226, 228, 234, 255)
+
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
 func accordionRoundness(width, height, radius float32) float32 {
@@ -518,14 +519,14 @@ func drawAccordionHeaderBand(bounds rl.Rectangle, titleHeight, roundness float32
 	}
 	if open {
 		// Match panel title bar: rounded cap + square bottom half at the divider.
-		rl.DrawRectangleRounded(titleRect, roundness, 6, color)
+		rl.DrawRectangleRounded(titleRect, roundness, 64, color)
 		if titleRect.Height > titleHeight/2 {
 			square := rl.NewRectangle(bounds.X, bounds.Y+titleHeight/2, bounds.Width, titleHeight/2)
 			rl.DrawRectangleRec(square, color)
 		}
 		return
 	}
-	rl.DrawRectangleRounded(titleRect, roundness, 6, color)
+	rl.DrawRectangleRounded(titleRect, roundness, 64, color)
 }
 
 // recomputeContentH recalculates the natural full height of all children.

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"os"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -66,26 +67,104 @@ var monoFontCandidates = []string{
 }
 
 func interFaceCandidates() []uiFacePaths {
+	// Default resolve order for family init / HUD (24pt mid ladder).
+	// Sticky strikes pick size-matched optical cuts via interFaceForStickySize.
+	out := append([]uiFacePaths{}, interOpticalCandidates(24)...)
+	out = append(out, interOpticalCandidates(28)...)
+	out = append(out, interOpticalCandidates(18)...)
+	out = append(out, []uiFacePaths{{
+		"assets/fonts/Inter/Inter-Regular.ttf",
+		"assets/fonts/Inter/Inter-Bold.ttf",
+		"assets/fonts/Inter/Inter-Italic.ttf",
+		"assets/fonts/Inter/Inter-BoldItalic.ttf",
+	}}...)
+	return out
+}
+
+func interOpticalCandidates(pt int) []uiFacePaths {
+	tag := fmt.Sprintf("Inter_%dpt", pt)
 	return []uiFacePaths{
 		{
-			"assets/fonts/Inter/Inter-Regular.ttf",
-			"assets/fonts/Inter/Inter-Bold.ttf",
-			"assets/fonts/Inter/Inter-Italic.ttf",
-			"assets/fonts/Inter/Inter-BoldItalic.ttf",
+			fmt.Sprintf("assets/fonts/Inter/static/%s-Regular.ttf", tag),
+			fmt.Sprintf("assets/fonts/Inter/static/%s-Bold.ttf", tag),
+			fmt.Sprintf("assets/fonts/Inter/static/%s-Italic.ttf", tag),
+			fmt.Sprintf("assets/fonts/Inter/static/%s-BoldItalic.ttf", tag),
 		},
 		{
-			"assets/fonts/inter/static/Inter_18pt-Regular.ttf",
-			"assets/fonts/inter/static/Inter_18pt-Bold.ttf",
-			"assets/fonts/inter/static/Inter_18pt-Italic.ttf",
-			"assets/fonts/inter/static/Inter_18pt-BoldItalic.ttf",
-		},
-		{
-			"assets/fonts/Inter-Regular.ttf",
-			"assets/fonts/Inter-Bold.ttf",
-			"assets/fonts/Inter-Italic.ttf",
-			"assets/fonts/Inter-BoldItalic.ttf",
+			fmt.Sprintf("assets/fonts/inter/static/%s-Regular.ttf", tag),
+			fmt.Sprintf("assets/fonts/inter/static/%s-Bold.ttf", tag),
+			fmt.Sprintf("assets/fonts/inter/static/%s-Italic.ttf", tag),
+			fmt.Sprintf("assets/fonts/inter/static/%s-BoldItalic.ttf", tag),
 		},
 	}
+}
+
+// interMediumCandidates — small sticky bold prefers Medium so counters stay open.
+func interMediumCandidates(pt int) []string {
+	tag := fmt.Sprintf("Inter_%dpt", pt)
+	return []string{
+		fmt.Sprintf("assets/fonts/Inter/static/%s-Medium.ttf", tag),
+		fmt.Sprintf("assets/fonts/inter/static/%s-Medium.ttf", tag),
+	}
+}
+
+// interSemiBoldCandidates: UI "bold" prefers SemiBold — Inter Bold fills counters
+// at 16–20px and looks uneven next to Regular on Font Faces.
+func interSemiBoldCandidates(pt int) []string {
+	tag := fmt.Sprintf("Inter_%dpt", pt)
+	return []string{
+		fmt.Sprintf("assets/fonts/Inter/static/%s-SemiBold.ttf", tag),
+		fmt.Sprintf("assets/fonts/inter/static/%s-SemiBold.ttf", tag),
+	}
+}
+
+// interFaceForStickySize picks an Inter optical cut for one sticky px size.
+// Baking Inter_24pt at 16px (or 18pt at 32px) is why preview looked crunchy vs Segoe.
+func interFaceForStickySize(sz int, bold bool) string {
+	pt := 24
+	switch {
+	case sz <= 20:
+		pt = 18
+	case sz <= 26:
+		pt = 24
+	default:
+		pt = 28
+	}
+	if bold {
+		// ≤18: Medium opens counters (SemiBold still clogs at soft LCD).
+		if sz <= 18 {
+			for _, cand := range interMediumCandidates(pt) {
+				if p := firstExisting(cand); p != "" {
+					return p
+				}
+			}
+		}
+		for _, cand := range interSemiBoldCandidates(pt) {
+			if p := firstExisting(cand); p != "" {
+				return p
+			}
+		}
+	}
+	for _, set := range interOpticalCandidates(pt) {
+		cand := set.regular
+		if bold {
+			cand = set.bold
+		}
+		if p := firstExisting(cand); p != "" {
+			return p
+		}
+	}
+	// Fall back across other opticals / generic Inter.
+	for _, set := range interFaceCandidates() {
+		cand := set.regular
+		if bold {
+			cand = set.bold
+		}
+		if p := firstExisting(cand); p != "" {
+			return p
+		}
+	}
+	return ""
 }
 
 func uiFontFileExists(path string) bool {

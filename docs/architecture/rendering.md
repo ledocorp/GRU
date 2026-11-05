@@ -1,6 +1,8 @@
 # Rendering
 
-Quality path: **MSAA + 2× SSAA**, SDF fonts/atlases, eager main **and** overlay render targets, then a wake/idle FPS policy. Footprint trimming must not defer overlay SSAA or invent per-widget FPS sleeps.
+Default path: **1× framebuffer** presentation with **4× MSAA**, **ClearType-style LCD text**, **high-resolution glyph raster**, and **1× shape anti-aliasing**. Main and overlay render targets are allocated eagerly; idle frames blit the last cached frame when nothing changed.
+
+Optional environment variables can raise the framebuffer scale (1.5× or 2×) for testing or comparison — they are not required for normal use.
 
 ---
 
@@ -8,32 +10,48 @@ Quality path: **MSAA + 2× SSAA**, SDF fonts/atlases, eager main **and** overlay
 
 | Piece | Role |
 |-------|------|
-| `FlagMsaa4xHint` | Hardware MSAA |
-| `InitSupersampling` at **2.0×** | SSAA render targets |
-| `InitDisplayAwareAtlases` | Icons / UI faces at display scale |
-| `RenderScale` | Camera zoom + scissor coords in the superframe |
+| `FlagMsaa4xHint` | Hardware MSAA on the window |
+| `InitSupersampling` | Main + overlay render targets; **1× scale by default** (no env vars) |
+| `InitDisplayAwareAtlases` | Icons / UI faces at display scale (not multiplied by SSAA) |
+| `RenderScale` | Camera zoom + scissor coords inside the render target |
+| Glyph supersampling | Text and icons raster on the CPU at higher resolution when the scene framebuffer is 1× |
 
 Widget authors draw Raylib primitives but should use Gru text helpers (`DrawText` / measure / effective font size) — not raw Raylib text APIs — so scale stays consistent.
 
-There is no public “1× performance mode”; it was removed after quality regressions.
+At 1×, quality comes from MSAA, LCD blending on opaque surfaces, coverage-aware strokes, and glyph raster — not from bilinear downscaling a 2× framebuffer.
 
 ---
 
-## SSAA pipeline
+## Optional framebuffer scale
+
+Set before or during `InitSupersampling` (the helper reads env on init):
+
+| Variable | Values | Effect |
+|----------|--------|--------|
+| `GRU_SSAA` | `1`, `1.5`, `2` | Explicit framebuffer multiplier |
+| `GRU_RENDER_QUALITY` | `max`, `balanced`, `lean`, `minimal` | Preset tiers (`max` → 2×; `minimal` → true 1×) |
+
+With **no variables set**, Gru keeps the **1× native default** — the recommended path for shipped apps.
+
+---
+
+## Present pipeline
 
 ```text
-InitSupersampling(w, h)   // main + overlay targets at 2×, FilterBilinear
+InitSupersampling(w, h)   // default 1×; main + overlay targets
 …
 if NeedsRedraw():
   BeginSuperFrame(clear) → Root.Draw → EndSuperFrame
 else:
-  cache hit — keep previous supersample
+  cache hit — keep previous frame
 BeginDrawing → BlitToScreen* → EndDrawing
 ```
 
 **Eager overlay RT:** both targets allocate at init. Deferring the overlay target until first use left modals/menus soft or missing after rescale. `EnsureOverlayTarget` is a safety net, not the primary path.
 
 On client resize: recreate textures (`ResizeWindowTextures` / rescale supersampling) — never stretch an old RT into a new client size (fat glyphs / missing columns).
+
+The main pass paints an **opaque page fill** before scene content so LCD text and thin strokes composite correctly at 1×.
 
 `ApplyUIOptimizations` disables depth test / backface culling / gestures as appropriate; audio is not initialized by default.
 
@@ -85,22 +103,24 @@ See [../widgets/overlays.md](../widgets/overlays.md).
 
 **Do**
 
-- Init both SSAA targets at startup; unload on shutdown  
+- Init both render targets at startup; unload on shutdown  
 - Resize textures on every client size change before blit  
 - Use wake reasons; prefer overlays for hover  
+- Paint opaque page fill in the main pass at 1×  
 
 **Don’t**
 
-- Defer overlay SSAA as a lean footprint trick  
+- Defer overlay target allocation as a footprint trick  
 - Ad-hoc sleeps / per-widget FPS throttles  
 - Enable global `WakeOnMouseMove` casually  
 - Fix scroll cost with post-blit viewport hacks  
+- Assume 2× framebuffer downscale is required for crisp text  
 
 ---
 
 ## Samples
 
-- `cmd/hello` — InitSupersampling + cache loop  
+- `cmd/hello` — `InitSupersampling` + cache loop  
 - grudemo: **Batch 1 · Tooltip / TabView / Modal**, **Batch 7 · Toast / Notification**, **Counter Demo**, **Theme v2 Foundation**  
 
 Next: [webview.md](webview.md) · [overview.md](overview.md)

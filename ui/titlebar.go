@@ -56,9 +56,10 @@ func SetTitleBarDoubleClickInterval(seconds float64) {
 }
 
 // Windows-style title-bar button widths (right-aligned).
+// Slightly wider than the glyph so − □ × have breathing room between hit targets.
 const (
-	closeBtnW = float32(48)
-	otherBtnW = float32(46)
+	closeBtnW = float32(54)
+	otherBtnW = float32(52)
 )
 
 // TitleBarStyle selects the visual theme.
@@ -117,6 +118,12 @@ type TitleBar struct {
 	OnMinimize   func()
 	OnMaximize   func()
 
+	// FillOverride, when A > 0, replaces theme/style title-bar fill (supports alpha
+	// for glass demos). Does not affect other hosts unless they set it.
+	FillOverride rl.Color
+	// RuleOverride, when A > 0, replaces the hairline under the title bar.
+	RuleOverride rl.Color
+
 	// drag-to-move
 	dragging    bool
 	dragStartMX float32 // screen-absolute mouse X when drag began
@@ -170,17 +177,33 @@ type TitleBar struct {
 // after a cached SSAA blit. Hover state is computed in Update every frame, but
 // Draw is skipped on cache hits — without a post-blit pass the close button
 // never shows its red hover plate.
+//
+// Hosts must call DrawCaptionHoverPlates (not full Draw) on the screen. Full
+// Draw restrokes fill + hairline + title over the blit. docs/PRESENT_1X_COMPOSITE.md
 func (tb *TitleBar) ChromeNeedsPostBlit() bool {
 	if tb == nil {
 		return false
 	}
-	if tb.hoverClose || tb.hoverMax || tb.hoverMin || tb.closeArmed {
-		return true
+	return tb.hoverClose || tb.hoverMax || tb.hoverMin || tb.closeArmed
+}
+
+// CaptionHoverMask returns a bitset of hovered caption buttons (1=close, 2=max, 4=min).
+// Hosts use this to invalidate the SSAA cache when hover moves between buttons.
+func (tb *TitleBar) CaptionHoverMask() int {
+	if tb == nil {
+		return 0
 	}
-	// Keep painting while the cursor is in the title band so leaving a button
-	// clears the hover plate without waiting for a full document redraw.
-	mouse := rl.GetMousePosition()
-	return mouse.Y >= 0 && mouse.Y < TitleBarHeight
+	mask := 0
+	if tb.hoverClose {
+		mask |= 1
+	}
+	if tb.hoverMax {
+		mask |= 2
+	}
+	if tb.hoverMin {
+		mask |= 4
+	}
+	return mask
 }
 
 // IsResizing reports an active borderless edge/corner resize drag.
@@ -272,8 +295,8 @@ func (tb *TitleBar) beginDragFromTitle(screenMX, screenMY float32, mouse rl.Vect
 }
 
 // armDragFromTitle starts a move drag without restore-from-maximize.
-// First click on a normal window arms grab immediately; maximized windows wait
-// for a 4px move (or a second click) so double-click restore still works.
+// Callers that need double-click (native path) must wait for a 4px move first;
+// beginDragFromTitle is only used after that threshold or on the fallback path.
 func (tb *TitleBar) armDragFromTitle(screenMX, screenMY float32) {
 	ResetWheelScrollGesture()
 	tb.dragging = true
@@ -413,19 +436,15 @@ func (tb *TitleBar) Update(windowW, windowH int32) {
 			tb.titleClickPending = false
 			tb.dragging = false
 		} else if titleBarNativeDblClickMaximize != nil {
-			// Both behaviors (§13.5 + double-click):
-			//  - always mark pending so WebViewDeferChromeRaise stays on
-			//  - if already restored: armDrag immediately (grab works like before)
-			//  - if maximized: wait for 4px move before restore+drag (dblclick works)
+			// Double-click maximize + drag: never arm drag on the first click.
+			// Wait for a second click (maximize) or a 4px move (drag) — same for
+			// restored and maximized. Arming drag immediately broke double-click.
 			tb.lastClickTime = now
 			tb.titleClickPending = true
 			tb.titleClickStartMX = screenMX
 			tb.titleClickStartMY = screenMY
 			tb.dragStartWX = tb.trackedX
 			tb.dragStartWY = tb.trackedY
-			if !rl.IsWindowMaximized() {
-				tb.armDragFromTitle(screenMX, screenMY)
-			}
 		} else {
 			tb.lastClickTime = now
 			tb.beginDragFromTitle(screenMX, screenMY, mouse)
@@ -438,9 +457,8 @@ func (tb *TitleBar) Update(windowW, windowH int32) {
 		tb.titleClickPending = false
 	}
 
-	// Maximized → drag-out: only after 4px so the first click of a double-click
-	// does not restore before the second click arrives.
-	if tb.titleClickPending && leftDown && rl.IsWindowMaximized() {
+	// Start drag only after 4px move so double-click can still fire.
+	if tb.titleClickPending && leftDown {
 		dx := screenMX - tb.titleClickStartMX
 		dy := screenMY - tb.titleClickStartMY
 		if dx*dx+dy*dy > 16 {
@@ -694,19 +712,21 @@ func drawTitleBarBackground(w int32, bg rl.Color, borderlessChrome bool) {
 }
 
 // Title-bar window controls — Remix Icon font (assets/fonts/remixicon.ttf).
-// slotScale sets footprint; strokeScale (<1) draws a lighter-weight glyph centered in the slot.
-const titleBarIconStrokeThin = float32(0.78)
+// Keep glyphs small in the hit target (Windows-like − □ ×), not bar-filling.
+// strokeScale stays 1 so sticky strikes draw 1:1 (scale≠1 reintroduces soft edges).
+const titleBarIconStroke = float32(1.0)
 
 func titleBarChromeIconSize(rect rl.Rectangle) float32 {
-	sz := rect.Height * 0.58
-	if rect.Width > 0 && rect.Width*0.72 < sz {
-		sz = rect.Width * 0.72
+	// ~18px in a 48px title bar — bit larger than the first thin pass, still Windows-like.
+	sz := rect.Height * 0.38
+	if rect.Width > 0 && rect.Width*0.48 < sz {
+		sz = rect.Width * 0.48
 	}
-	if sz > 32 {
-		sz = 32
-	}
-	if sz < 20 {
+	if sz > 20 {
 		sz = 20
+	}
+	if sz < 16 {
+		sz = 16
 	}
 	return sz
 }
@@ -716,7 +736,7 @@ func drawTitleBarChromeIcon(rect rl.Rectangle, cp rune, col rl.Color, slotScale,
 		slotScale = 1
 	}
 	if strokeScale <= 0 {
-		strokeScale = titleBarIconStrokeThin
+		strokeScale = titleBarIconStroke
 	}
 	base := titleBarChromeIconSize(rect)
 	sz := base * slotScale
@@ -728,7 +748,7 @@ func drawTitleBarChromeIcon(rect rl.Rectangle, cp rune, col rl.Color, slotScale,
 	drawRemixIcon(inner, cp, col, strokeScale)
 }
 
-// drawTitleBarButtonHover draws a subtle rounded hover plate inside a button zone.
+// drawTitleBarButtonHover draws a subtle inset hover plate (min / max).
 func drawTitleBarButtonHover(rect rl.Rectangle, col rl.Color) {
 	inset := float32(6)
 	inner := rl.NewRectangle(rect.X+inset, rect.Y+inset, rect.Width-2*inset, rect.Height-2*inset)
@@ -738,10 +758,31 @@ func drawTitleBarButtonHover(rect rl.Rectangle, col rl.Color) {
 	}
 	rn := titleBarRoundness(inner.Width, inner.Height, 6)
 	if rn > 0 {
-		rl.DrawRectangleRounded(inner, rn, 6, col)
+		DrawRoundedFill(inner, rn, col)
 	} else {
 		rl.DrawRectangleRec(inner, col)
 	}
+}
+
+// drawTitleBarCloseHover paints flush to the top-right window corner (Win11-style),
+// not an inset pill that leaves a chrome margin around the red.
+func drawTitleBarCloseHover(rect rl.Rectangle, windowW float32, col rl.Color) {
+	r := snapControlRect(rl.NewRectangle(rect.X, 0, rect.Width, TitleBarHeight))
+	if r.X+r.Width < windowW {
+		r.Width = windowW - r.X
+	}
+	// Outer top-right follows window roundness when borderless; otherwise square flush.
+	cr := float32(0)
+	if PreferGeometryCoverageAA() {
+		cr = 8
+	}
+	if cr > 0 && r.Width > cr*2 && r.Height > cr {
+		// Full rect + coverage fill with roundness only reads as uniform corners;
+		// draw solid flush — matches Win caption close hover better than inset pills.
+		rl.DrawRectangleRec(r, col)
+		return
+	}
+	rl.DrawRectangleRec(r, col)
 }
 
 // ─── Draw ─────────────────────────────────────────────────────────────────────
@@ -750,10 +791,136 @@ func drawTitleBarButtonHover(rect rl.Rectangle, col rl.Color) {
 func (tb *TitleBar) Draw() {
 	w := float32(tb.windowW)
 	borderlessChrome := tb.HandleResize
+	bg, textCol, hoverBg := tb.captionColors()
 
-	// Theme colours — prefer CurrentTheme["titlebar"] when SetAppearance has run.
-	// (Restored from NB_061026 — Style-first broke Studio Full Client seam.)
-	var bg, textCol, hoverBg rl.Color
+	drawTitleBarBackground(tb.windowW, bg, borderlessChrome)
+
+	// Hairline under title bar — 1 device px on the last row (not Height-0.5).
+	lineCol := rl.NewColor(222, 226, 230, 255)
+	if tb.RuleOverride.A > 0 {
+		lineCol = tb.RuleOverride
+	} else if tbStyle, ok := CurrentTheme["titlebar"]; ok && tbStyle.BorderColor.A > 0 {
+		lineCol = tbStyle.BorderColor
+	} else if ribbon, ok := CurrentTheme["toolbar-ribbon"]; ok && ribbon.BorderColor.A > 0 {
+		lineCol = ribbon.BorderColor
+	}
+	rl.DrawRectangle(0, int32(TitleBarHeight)-1, int32(w), 1, lineCol)
+
+	btnTotalW := closeBtnW + otherBtnW + otherBtnW
+
+	if tb.ShowAppIcon && tb.DrawLeadingIcon != nil {
+		pad := float32(12)
+		icon := TitleBarAppIconSize
+		iconRect := rl.NewRectangle(pad, (TitleBarHeight-icon)/2, icon, icon)
+		tb.DrawLeadingIcon(iconRect)
+	}
+
+	// Title — centered in the FULL window width, but pulled left if it would
+	// overlap the right-side buttons.
+	if tb.ShowTitle && tb.Title != "" {
+		titleAreaW := w - btnTotalW // safe zone: left edge to first button
+		titleStyle := GetThemeStyle("default")
+		titleStyle.FontSize = int32(titleFontSize)
+		titleStyle.TextColor = textCol
+		titleStyle.Bold = false
+		titleStyle.NoCaptionBold = true
+		titleFS := EffectiveFontSize(titleStyle)
+		titleW := float32(measureTextS(tb.Title, titleStyle))
+		titleY := (TitleBarHeight - titleFS) / 2
+		if titleW < titleAreaW {
+			titleX := (w - titleW) / 2 // ideal: dead-centre in window
+			if titleX+titleW > w-btnTotalW {
+				// Would overlap buttons — shift left to flush with button area
+				titleX = (titleAreaW - titleW) / 2
+			}
+			if titleX < 12 {
+				titleX = 12
+			}
+			popLCD := PushLCDSurfaceBackdrop(bg)
+			drawTextS(tb.Title, int32(titleX), int32(titleY+1), titleStyle)
+			PopLCDSurfaceBackdrop(popLCD)
+		}
+	}
+
+	// ── Control buttons ───────────────────────────────────────────────────────
+	closeX := w - closeBtnW
+	maxX := closeX - otherBtnW
+	minX := maxX - otherBtnW
+
+	closeRect := rl.NewRectangle(closeX, 0, closeBtnW, TitleBarHeight)
+	maxRect := rl.NewRectangle(maxX, 0, otherBtnW, TitleBarHeight)
+	minRect := rl.NewRectangle(minX, 0, otherBtnW, TitleBarHeight)
+
+	// Hover backgrounds
+	if tb.hoverMin {
+		drawTitleBarButtonHover(minRect, hoverBg)
+	}
+	if tb.hoverMax {
+		drawTitleBarButtonHover(maxRect, hoverBg)
+	}
+	if tb.hoverClose {
+		drawTitleBarCloseHover(closeRect, w, rl.NewColor(196, 43, 28, 255))
+	}
+
+	symCol := textCol
+	closeSymCol := textCol
+	if tb.hoverClose {
+		closeSymCol = rl.White
+	}
+
+	// − □ × — close glyph ~2px larger than min/max (Windows-like emphasis).
+	const chromeSlot = float32(1.0)
+	const closeSlot = float32(1.12) // ≈ +2px at ~18px base
+	if tb.OnMinimize != nil {
+		drawTitleBarChromeIcon(minRect, RemixSubtract, symCol, chromeSlot, titleBarIconStroke)
+	}
+	if tb.OnMaximize != nil {
+		if rl.IsWindowMaximized() {
+			drawTitleBarChromeIcon(maxRect, RemixCheckboxMultipleBlank, symCol, chromeSlot, titleBarIconStroke)
+		} else {
+			drawTitleBarChromeIcon(maxRect, RemixSquare, symCol, chromeSlot, titleBarIconStroke)
+		}
+	}
+	drawTitleBarChromeIcon(closeRect, RemixClose, closeSymCol, closeSlot, titleBarIconStroke)
+}
+
+// DrawCaptionHoverPlates paints only min/max/close hover plates + glyphs after a
+// cached blit. Does not restroke the title fill, hairline, or caption.
+func (tb *TitleBar) DrawCaptionHoverPlates() {
+	if tb == nil || !tb.ChromeNeedsPostBlit() {
+		return
+	}
+	w := float32(tb.windowW)
+	_, textCol, hoverBg := tb.captionColors()
+
+	closeX := w - closeBtnW
+	maxX := closeX - otherBtnW
+	minX := maxX - otherBtnW
+	closeRect := rl.NewRectangle(closeX, 0, closeBtnW, TitleBarHeight)
+	maxRect := rl.NewRectangle(maxX, 0, otherBtnW, TitleBarHeight)
+	minRect := rl.NewRectangle(minX, 0, otherBtnW, TitleBarHeight)
+
+	const chromeSlot = float32(1.0)
+	const closeSlot = float32(1.12)
+	if tb.hoverMin {
+		drawTitleBarButtonHover(minRect, hoverBg)
+		drawTitleBarChromeIcon(minRect, RemixSubtract, textCol, chromeSlot, titleBarIconStroke)
+	}
+	if tb.hoverMax {
+		drawTitleBarButtonHover(maxRect, hoverBg)
+		if rl.IsWindowMaximized() {
+			drawTitleBarChromeIcon(maxRect, RemixCheckboxMultipleBlank, textCol, chromeSlot, titleBarIconStroke)
+		} else {
+			drawTitleBarChromeIcon(maxRect, RemixSquare, textCol, chromeSlot, titleBarIconStroke)
+		}
+	}
+	if tb.hoverClose {
+		drawTitleBarCloseHover(closeRect, w, rl.NewColor(196, 43, 28, 255))
+		drawTitleBarChromeIcon(closeRect, RemixClose, rl.White, closeSlot, titleBarIconStroke)
+	}
+}
+
+func (tb *TitleBar) captionColors() (bg, textCol, hoverBg rl.Color) {
 	if tbStyle, ok := CurrentTheme["titlebar"]; ok && tbStyle.BackgroundColor.A > 0 {
 		bg = tbStyle.BackgroundColor
 		textCol = tbStyle.TextColor
@@ -778,99 +945,10 @@ func (tb *TitleBar) Draw() {
 			hoverBg = rl.NewColor(255, 255, 255, 18)
 		}
 	}
-
-	drawTitleBarBackground(tb.windowW, bg, borderlessChrome)
-
-	// Hairline under title bar — shared with ribbon/menubar below (no drop shadow).
-	// DrawLineEx at Height-0.5 matches NB_061026 / Studio (do not move onto content band).
-	lineCol := rl.NewColor(222, 226, 230, 255)
-	if tbStyle, ok := CurrentTheme["titlebar"]; ok && tbStyle.BorderColor.A > 0 {
-		lineCol = tbStyle.BorderColor
-	} else if ribbon, ok := CurrentTheme["toolbar-ribbon"]; ok && ribbon.BorderColor.A > 0 {
-		lineCol = ribbon.BorderColor
+	if tb.FillOverride.A > 0 {
+		bg = tb.FillOverride
 	}
-	ruleY := TitleBarHeight - 0.5
-	rl.DrawLineEx(
-		rl.NewVector2(0, ruleY),
-		rl.NewVector2(w, ruleY),
-		1, lineCol,
-	)
-
-	btnTotalW := closeBtnW + otherBtnW + otherBtnW
-
-	if tb.ShowAppIcon && tb.DrawLeadingIcon != nil {
-		pad := float32(12)
-		icon := TitleBarAppIconSize
-		iconRect := rl.NewRectangle(pad, (TitleBarHeight-icon)/2, icon, icon)
-		tb.DrawLeadingIcon(iconRect)
-	}
-
-	// Title — centered in the FULL window width, but pulled left if it would
-	// overlap the right-side buttons.
-	if tb.ShowTitle && tb.Title != "" {
-		titleAreaW := w - btnTotalW // safe zone: left edge to first button
-		titleStyle := GetThemeStyle("default")
-		titleStyle.FontSize = int32(titleFontSize)
-		titleStyle.TextColor = textCol
-		titleStyle.Bold = false
-		titleFS := EffectiveFontSize(titleStyle)
-		titleW := float32(measureTextS(tb.Title, titleStyle))
-		titleY := (TitleBarHeight - titleFS) / 2
-		if titleW < titleAreaW {
-			titleX := (w - titleW) / 2 // ideal: dead-centre in window
-			if titleX+titleW > w-btnTotalW {
-				// Would overlap buttons — shift left to flush with button area
-				titleX = (titleAreaW - titleW) / 2
-			}
-			if titleX < 12 {
-				titleX = 12
-			}
-			drawTextS(tb.Title, int32(titleX), int32(titleY+1), titleStyle)
-		}
-	}
-
-	// ── Control buttons ───────────────────────────────────────────────────────
-	closeX := w - closeBtnW
-	maxX := closeX - otherBtnW
-	minX := maxX - otherBtnW
-
-	closeRect := rl.NewRectangle(closeX, 0, closeBtnW, TitleBarHeight)
-	maxRect := rl.NewRectangle(maxX, 0, otherBtnW, TitleBarHeight)
-	minRect := rl.NewRectangle(minX, 0, otherBtnW, TitleBarHeight)
-
-	// Hover backgrounds (rounded inset plates)
-	if tb.hoverMin {
-		drawTitleBarButtonHover(minRect, hoverBg)
-	}
-	if tb.hoverMax {
-		drawTitleBarButtonHover(maxRect, hoverBg)
-	}
-	if tb.hoverClose {
-		drawTitleBarButtonHover(closeRect, rl.NewColor(196, 43, 28, 255))
-	}
-
-	symCol := textCol
-	closeSymCol := textCol
-	if tb.hoverClose {
-		closeSymCol = rl.White
-	}
-
-	// ─ Minimize (em dash)
-	if tb.OnMinimize != nil {
-		drawTitleBarChromeIcon(minRect, RemixSubtract, symCol, 1.0, titleBarIconStrokeThin)
-	}
-
-	// □ Maximize / restore-to-window
-	if tb.OnMaximize != nil {
-		if rl.IsWindowMaximized() {
-			drawTitleBarChromeIcon(maxRect, RemixCheckboxMultipleBlank, symCol, 0.75, titleBarIconStrokeThin)
-		} else {
-			drawTitleBarChromeIcon(maxRect, RemixSquare, symCol, 0.75, titleBarIconStrokeThin)
-		}
-	}
-
-	// × Close
-	drawTitleBarChromeIcon(closeRect, RemixClose, closeSymCol, 1.0, titleBarIconStrokeThin)
+	return bg, textCol, hoverBg
 }
 
 // DrawResizeGrip draws a small phosphor resize hint in the bottom-right corner.

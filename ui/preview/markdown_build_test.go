@@ -468,3 +468,40 @@ func TestHTMLFragmentToSpans(t *testing.T) {
 		t.Fatal("expected bold HTML span")
 	}
 }
+
+func TestMarkdownHardLineBreaksStack(t *testing.T) {
+	// Trailing two spaces → goldmark HardLineBreak on an empty Text node.
+	src := "**Site:** [a](https://a.example)  \n**Repo:** [b](https://b.example)  \n**License:** Apache\n"
+	nodes := BuildMarkdownNodes("hb", src)
+	if len(nodes) != 1 {
+		t.Fatalf("nodes = %d, want 1 paragraph", len(nodes))
+	}
+	rt, ok := nodes[0].(*ui.RichText)
+	if !ok {
+		t.Fatalf("node = %T, want RichText", nodes[0])
+	}
+	joined := plainInline(rt.Spans)
+	if strings.Count(joined, "\n") < 2 {
+		t.Fatalf("hard breaks missing in %q", joined)
+	}
+	if !strings.Contains(joined, "Site:") || !strings.Contains(joined, "Repo:") || !strings.Contains(joined, "License:") {
+		t.Fatalf("text = %q", joined)
+	}
+}
+
+func TestMarkdownSoftLineBreaksStack(t *testing.T) {
+	// Single newlines (no trailing spaces) — Notepad preview keeps line breaks.
+	src := "**site.**\n[ledocorp.org/fx](https://ledocorp.org/fx)\n**site.**\n[ledocorp.org/fx](https://ledocorp.org/fx)\n"
+	nodes := BuildMarkdownNodes("sb", src)
+	if len(nodes) != 1 {
+		t.Fatalf("nodes = %d, want 1 paragraph", len(nodes))
+	}
+	rt, ok := nodes[0].(*ui.RichText)
+	if !ok {
+		t.Fatalf("node = %T, want RichText", nodes[0])
+	}
+	joined := plainInline(rt.Spans)
+	if strings.Count(joined, "\n") < 3 {
+		t.Fatalf("soft breaks missing in %q", joined)
+	}
+}

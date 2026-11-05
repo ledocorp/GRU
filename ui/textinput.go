@@ -305,7 +305,7 @@ func (ti *TextInput) drawInternal() {
 
 	if ti.keyboardActive() && int(ti.blinkTimer*2)%2 == 0 {
 		cursorX := int32(layoutBounds.X) + pad + measureTextS(text[:ti.cursor], style) - ti.scrollOffset
-		rl.DrawLine(cursorX, posY, cursorX, posY+int32(EffectiveFontSize(style)), focusRingIndigo)
+		drawStyledCaret(cursorX, posY, style, focusRingIndigo)
 	}
 }
 
@@ -402,8 +402,7 @@ func drawTextInputChrome(outer rl.Rectangle, chrome Style, focused bool) {
 
 // drawTextInputFocusAccent traces the bottom edge; draw before the grey border so it sits underneath.
 func drawTextInputFocusAccent(outer rl.Rectangle, cornerPx float32, col rl.Color) {
-	const stroke = float32(5)
-	const behindPad = float32(2)
+	const stroke = float32(3)
 	cr := cornerPx
 	if cr < 3 {
 		cr = 3
@@ -411,8 +410,9 @@ func drawTextInputFocusAccent(outer rl.Rectangle, cornerPx float32, col rl.Color
 	if cr*2 >= outer.Width {
 		cr = outer.Width * 0.18
 	}
-	bottom := outer.Y + outer.Height + behindPad
-	y := bottom - stroke*0.5
+	// Flush under the field (no behindPad float — C14 underlines).
+	bottom := outer.Y + outer.Height
+	y := bottom - stroke*0.35
 	left := outer.X + cr
 	right := outer.X + outer.Width - cr
 	rl.DrawLineEx(rl.NewVector2(left, y), rl.NewVector2(right, y), stroke, col)

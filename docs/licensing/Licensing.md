@@ -16,7 +16,7 @@ Gru platform source that we publish is licensed under the **GNU General Public L
 | **Primary maintainer** | Shawn Londono |
 | **Model** | **BDFL** — no public PR merge program |
 
-LedoCorp publishes Gru; Shawn Londono is the founder and BDFL. The public project name is **Gru (GRU)**. The historical label **GoRy** is deprecated and must not appear in public branding.
+LedoCorp publishes Gru; Shawn Londono is the founder and BDFL. The public project name is **Gru (GRU)**.
 
 ## What GPLv3 covers (when published)
 
@@ -31,13 +31,9 @@ LedoCorp publishes Gru; Shawn Londono is the founder and BDFL. The public projec
 
 You may use, modify, and distribute GPLv3-covered works per the `LICENSE`. Distributing a combined program that includes Gru typically means the distributed work must comply with GPLv3 (including source obligations) unless you obtain a commercial license from LedoCorp.
 
-## What is not in the public repo yet
+## What is not in this repository
 
-These stay in the private monorepo for now (still Gru-related; **not** a second open-source license):
-
-- Prism  
-- Studio / testing harness / full demo catalog / benchmarks  
-- Foundry (internal R&D)
+This GitHub repository ships the toolkit, samples, and curated demos only. Other LedoCorp applications and internal development tools are maintained separately.
 
 ## Commercial / dual license
 
@@ -45,8 +41,8 @@ These stay in the private monorepo for now (still Gru-related; **not** a second 
 
 ## Third-party software
 
-See root [`NOTICE`](../../NOTICE) and the credits table in [`staging/PUBLIC_README.md`](../../staging/PUBLIC_README.md). Maintainer checklist: [THIRD_PARTY.md](THIRD_PARTY.md).
+See root [`NOTICE`](../../NOTICE) and the credits table in [`README.md`](../../README.md). Maintainer checklist: [THIRD_PARTY.md](THIRD_PARTY.md).
 
 ---
 
-*LedoCorp / Shawn Londono — Gru (GRU) — GPLv3 · BDFL · 0.8.x*
+*LedoCorp / Shawn Londono — Gru (GRU) — GPLv3 · BDFL*

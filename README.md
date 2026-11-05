@@ -1,10 +1,10 @@
 # Gru
 
-**Version:** [0.8.0](https://github.com/ledocorp/GRU/releases/tag/v0.8.0) 
+**Version:** 0.9.0 (tip sync — S1 present / text ship default)
 
 **Gru (GRU)** is a Go-first UI toolkit (retained-mode, Raylib-backed) for building desktop applications.
 
-**License:** [GNU GPLv3](LICENSE) · **BDFL** (no public PRs) · version **0.8.0**  
+**License:** [GNU GPLv3](LICENSE) · **BDFL** (no public PRs) · version **0.9.0**  
 **Third-party notices:** [NOTICE](NOTICE)  
 **Copyright:** Shawn Londono and LedoCorp  
 **Publisher:** [LedoCorp](https://ledocorp.org) · **Maintainer:** Shawn Londono
@@ -31,9 +31,7 @@ vendored into this repository.
 
 ## What’s not in this repository
 
-- Prism (paused / private)  
-- Full Studio testing harness and private catalog  
-- Foundry R&D (internal)  
+Other LedoCorp applications and internal development tools are maintained separately. This repository ships the toolkit, samples, and curated demos only.
 
 Commercial dual-licensing may come later; it is **not** part of this release.
 
@@ -42,7 +40,7 @@ Commercial dual-licensing may come later; it is **not** part of this release.
 ## Module
 
 ```bash
-go get github.com/ledocorp/gru@v0.8.0
+go get github.com/ledocorp/gru@v0.9.0
 ```
 
 ```go

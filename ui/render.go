@@ -10,6 +10,9 @@ import (
 
 // ─── Supersampling / Render-scale system ─────────────────────────────────────
 //
+// Two presents per frame (Studio): main superTarget (page + title bar) and
+// overlayTarget (menu/footer). Canonical: docs/PRESENT_1X_COMPOSITE.md
+//
 // Gru supports optional 2× supersampled anti-aliasing (SSAA) via an
 // off-screen RenderTexture2D. When active:
 //
@@ -58,6 +61,20 @@ var overlayTarget rl.RenderTexture2D
 var superFrameActive bool
 var overlayFrameActive bool
 
+// superTargetNeedsFill is set when the SSAA RT is (re)allocated empty. Blitting
+// before BeginSuperFrame shows as a black client (resize flash / gap).
+var superTargetNeedsFill bool
+
+// superFrameBlendAlpha is true when BeginSuperFrame opened BlendAlpha (1× overlay-parity).
+var superFrameBlendAlpha bool
+
+// SuperTargetNeedsFill reports that the SSAA RT must be redrawn before blit.
+func SuperTargetNeedsFill() bool { return superTargetNeedsFill }
+
+func noteSuperTargetRecreated() {
+	superTargetNeedsFill = true
+}
+
 // logicalW / logicalH store the window size used at InitSupersampling so that
 // SetSupersamplingScale can recreate the render target without the caller
 // needing to track the window size.
@@ -83,25 +100,53 @@ func clampDim(w, h int32) (int32, int32) {
 // (EnsureOverlayTarget-only) left modals/menus soft or missing after rescale —
 // do not revive that footprint shortcut for apps that paint native overlays.
 func InitSupersampling(w, h int32) {
+	ApplyRenderQualityFromEnv()
 	w, h = clampDim(w, h)
 	logicalW, logicalH = w, h
-	superTarget = rl.LoadRenderTexture(w*2, h*2)
-	overlayTarget = rl.LoadRenderTexture(w*2, h*2)
-	rl.SetTextureFilter(superTarget.Texture, rl.FilterBilinear)
-	rl.SetTextureFilter(overlayTarget.Texture, rl.FilterBilinear)
-	RenderScale = 2
+	scale := EffectiveSupersamplingScale()
+	if scale < 1 {
+		scale = 1
+	}
+	// Always allocate main+overlay RTs — including scale 1.0 — so hosts stay on the
+	// SSAA present path (BeginSuperFrame → blit). Falling through to the 1× document
+	// cache path caused soft SDF + click/hit-test divergence (Phase 4 lean dogfood).
+	texW, texH := clampDim(int32(float32(w)*scale), int32(float32(h)*scale))
+	superTarget = rl.LoadRenderTexture(texW, texH)
+	overlayTarget = rl.LoadRenderTexture(texW, texH)
+	applySupersampleTextureFilter(scale)
+	RenderScale = scale
+	noteSuperTargetRecreated()
+}
+
+func applySupersampleTextureFilter(scale float32) {
+	// At SSAA 1× with ClearType strikes, bilinear blit softens RGB subpixel
+	// coverage (north star: present LCD 1:1). SDF Path A still uses bilinear
+	// when LCD strikes are off (point looked choppy on greyscale SDF).
+	filter := rl.FilterBilinear
+	if scale <= 1.01 && PreferFTLCDChrome() {
+		filter = rl.FilterPoint
+	}
+	if superTarget.ID != 0 {
+		rl.SetTextureFilter(superTarget.Texture, filter)
+	}
+	if overlayTarget.ID != 0 {
+		rl.SetTextureFilter(overlayTarget.Texture, filter)
+	}
 }
 
 // EnsureOverlayTarget is a safety net if the overlay RT was cleared (e.g. mid
 // rescale). Prefer InitSupersampling / RescaleSupersampling creating both RTs
 // together — do not rely on lazy first-overlay allocation as the primary path.
 func EnsureOverlayTarget() {
-	if overlayTarget.ID != 0 || RenderScale <= 1 || logicalW < 1 || logicalH < 1 {
+	if overlayTarget.ID != 0 || logicalW < 1 || logicalH < 1 {
+		return
+	}
+	if RenderScale < 1 {
 		return
 	}
 	texW, texH := clampDim(int32(float32(logicalW)*RenderScale), int32(float32(logicalH)*RenderScale))
 	overlayTarget = rl.LoadRenderTexture(texW, texH)
-	rl.SetTextureFilter(overlayTarget.Texture, rl.FilterBilinear)
+	applySupersampleTextureFilter(RenderScale)
 }
 
 // SetSupersamplingScale adjusts the render scale at runtime without requiring
@@ -169,19 +214,83 @@ func RescaleSupersampling(scale float32, w, h int32) {
 	if w > 0 && h > 0 {
 		logicalW, logicalH = w, h
 	}
-	if scale > 1.0 {
-		texW, texH := clampDim(int32(float32(logicalW)*scale), int32(float32(logicalH)*scale))
-		superTarget = rl.LoadRenderTexture(texW, texH)
-		overlayTarget = rl.LoadRenderTexture(texW, texH)
-		rl.SetTextureFilter(superTarget.Texture, rl.FilterBilinear)
-		rl.SetTextureFilter(overlayTarget.Texture, rl.FilterBilinear)
-	}
+	// Always (re)create RTs at scale ≥ 1 — including 1.0 — same present path as 2×.
+	texW, texH := clampDim(int32(float32(logicalW)*scale), int32(float32(logicalH)*scale))
+	superTarget = rl.LoadRenderTexture(texW, texH)
+	overlayTarget = rl.LoadRenderTexture(texW, texH)
+	applySupersampleTextureFilter(scale)
 	RenderScale = scale
+	BaseSupersamplingScale = scale
+	noteSuperTargetRecreated()
 }
+
+// Window texture resize during live drag — Unload+Load every OS pixel stalls GL
+// (Responsive/Notepad ~8 FPS). Dogfood 2026-08-17 (NOTEPAD_POLISH / GRU_CORE):
+// same-frame *layout*, never stretch/texture-hold. Mid-drag we defer RT recreate
+// and present via direct-draw (PresentSizeMismatch); flush once on settle.
+// Do NOT drip-feed recreates on a timer — that is still thrash + often a double
+// draw (stale RT pass + screen fallback).
+var pendingTexW, pendingTexH int32
+
+func windowGPUTexDrift(expW, expH int32) bool {
+	if superTarget.ID != 0 {
+		t := superTarget.Texture
+		if t.ID != 0 && (int32(t.Width) != expW || int32(t.Height) != expH) {
+			return true
+		}
+	}
+	if overlayTarget.ID != 0 {
+		t := overlayTarget.Texture
+		if t.ID != 0 && (int32(t.Width) != expW || int32(t.Height) != expH) {
+			return true
+		}
+	}
+	return false
+}
+
+// DeferWindowTextures queues a GPU RT recreate without applying it. Use while
+// resize is active so present stays on the direct-draw path.
+func DeferWindowTextures(w, h int32) {
+	if w < 1 || h < 1 {
+		return
+	}
+	w, h = clampDim(w, h)
+	expW, expH := clampDim(int32(float32(w)*RenderScale), int32(float32(h)*RenderScale))
+	if w == logicalW && h == logicalH && !windowGPUTexDrift(expW, expH) {
+		pendingTexW, pendingTexH = 0, 0
+		return
+	}
+	pendingTexW, pendingTexH = w, h
+}
+
+// ResizeWindowTexturesThrottled queues a GPU RT recreate. force=false only
+// defers (live drag); force=true flushes immediately (settle / first paint).
+// Kept name for call sites; behavior matches Defer + optional Flush (no timer).
+func ResizeWindowTexturesThrottled(w, h int32, force bool) {
+	DeferWindowTextures(w, h)
+	if force {
+		FlushPendingWindowTextures()
+	}
+}
+
+// FlushPendingWindowTextures applies a deferred ResizeWindowTextures (no-op if none).
+func FlushPendingWindowTextures() {
+	if pendingTexW < 1 || pendingTexH < 1 {
+		return
+	}
+	w, h := pendingTexW, pendingTexH
+	pendingTexW, pendingTexH = 0, 0
+	ResizeWindowTextures(w, h)
+}
+
+// PendingWindowTextures reports a deferred GPU resize is waiting (tests / settle).
+func PendingWindowTextures() bool { return pendingTexW >= 1 && pendingTexH >= 1 }
 
 // ResizeWindowTextures re-creates the supersampled render target to match new
 // window dimensions. Call this whenever rl.GetScreenWidth/Height changes.
 // It is a no-op when the dimensions are unchanged or when SSAA is disabled.
+// During live edge drag prefer DeferWindowTextures + FlushPendingWindowTextures
+// on settle — never stretch an old RT (GRU_CORE 2026-08-17).
 func ResizeWindowTextures(w, h int32) {
 	// Minimized / invalid framebuffer: keep last good logical size and GPU target
 	// so we do not allocate a 0×0 or incomplete FBO (raylib logs and may abort).
@@ -189,22 +298,28 @@ func ResizeWindowTextures(w, h int32) {
 		return
 	}
 	w, h = clampDim(w, h)
-	if w == logicalW && h == logicalH {
+	expW, expH := clampDim(int32(float32(w)*RenderScale), int32(float32(h)*RenderScale))
+	need := w != logicalW || h != logicalH
+	// Logical can match while the GPU tex drifted (failed recreate, scale race).
+	// That path used to inset-blit tex footprint into the client → ghost layers.
+	if !need {
+		need = windowGPUTexDrift(expW, expH)
+	}
+	if !need {
 		return
 	}
 	logicalW, logicalH = w, h
 	if superTarget.ID != 0 {
 		rl.UnloadRenderTexture(superTarget)
-		texW, texH := clampDim(int32(float32(w)*RenderScale), int32(float32(h)*RenderScale))
-		superTarget = rl.LoadRenderTexture(texW, texH)
-		rl.SetTextureFilter(superTarget.Texture, rl.FilterBilinear)
+		superTarget = rl.LoadRenderTexture(expW, expH)
 	}
 	if overlayTarget.ID != 0 {
 		rl.UnloadRenderTexture(overlayTarget)
-		texW, texH := clampDim(int32(float32(w)*RenderScale), int32(float32(h)*RenderScale))
-		overlayTarget = rl.LoadRenderTexture(texW, texH)
-		rl.SetTextureFilter(overlayTarget.Texture, rl.FilterBilinear)
+		overlayTarget = rl.LoadRenderTexture(expW, expH)
 	}
+	applySupersampleTextureFilter(RenderScale)
+	noteSuperTargetRecreated()
+	pendingTexW, pendingTexH = 0, 0
 }
 
 // BeginSuperFrame begins the 2× supersampled draw pass.
@@ -220,11 +335,22 @@ func ResizeWindowTextures(w, h int32) {
 // Call EndSuperFrame when the draw pass is complete.
 func BeginSuperFrame(clearColor rl.Color, borderless bool, winW, winH int32) {
 	superFrameActive = true
+	superTargetNeedsFill = false
+	superFrameBlendAlpha = false
+	SetFTLCDLightBackdrop(clearColor)
 	rl.BeginTextureMode(superTarget)
 	rl.ClearBackground(rl.Blank)
 	cam := rl.Camera2D{}
 	cam.Zoom = RenderScale
 	rl.BeginMode2D(cam)
+	// Overlay stays Blank (it paints its own opaque chrome). The main pass must
+	// paint an opaque page first: coverage-AA strokes and LCD coverage-alpha
+	// blended onto Blank, then alpha-blitted over the screen fill, double.
+	// Screen fill remains for rounded corners / the resize gap only.
+	if RenderScale <= 1.01 {
+		rl.BeginBlendMode(rl.BlendAlpha)
+		superFrameBlendAlpha = true
+	}
 	if borderless {
 		DrawBorderlessWindowFill(winW, winH, clearColor)
 	} else {
@@ -234,13 +360,46 @@ func BeginSuperFrame(clearColor rl.Color, borderless bool, winW, winH int32) {
 
 // EndSuperFrame closes the Camera2D transform and ends the render-texture pass.
 func EndSuperFrame() {
+	if superFrameBlendAlpha {
+		rl.EndBlendMode()
+		superFrameBlendAlpha = false
+	}
 	rl.EndMode2D()
 	rl.EndTextureMode()
 	superFrameActive = false
 }
 
+// SuperTargetLogicalSize is the client size the offscreen RT was last built for.
+func SuperTargetLogicalSize() (w, h int32) {
+	return logicalW, logicalH
+}
+
+// PresentSizeMismatch reports that blit dest would not match the RT footprint
+// (would stretch or inset-blit). Hosts must sync + redraw before present.
+func PresentSizeMismatch(dstW, dstH int32) bool {
+	if logicalW < 1 || logicalH < 1 || dstW < 1 || dstH < 1 {
+		return false
+	}
+	if dstW != logicalW || dstH != logicalH {
+		return true
+	}
+	// At lean (scale≈1), GPU tex must equal logical dest for a true 1:1 copy.
+	if RenderScale <= 1.01 && superTarget.ID != 0 {
+		t := superTarget.Texture
+		if t.ID != 0 && (int32(t.Width) != dstW || int32(t.Height) != dstH) {
+			return true
+		}
+	}
+	return false
+}
+
 // BeginDrawingBorderless prepares the default framebuffer before blit.
 // Borderless: transparent clear + rounded fill (not ClearBackground(bgColor)).
+//
+// Resize: do **not** defer/stretch/inset the offscreen RT. Same-frame client
+// sync recreates the RT and redraws before blit. Present must stay 1:1 with the
+// RT logical size so ClearType at lean (scale 1) stays Regular weight with no
+// ghost layers.
 func BeginDrawingBorderless(clearColor rl.Color, borderless bool, winW, winH int32) {
 	if borderless {
 		rl.ClearBackground(rl.Blank)
@@ -256,6 +415,18 @@ func BeginDrawingBorderless(clearColor rl.Color, borderless bool, winW, winH int
 // the screen.
 func SuperFrameActive() bool { return superFrameActive }
 
+// beginTransparentTexturePass is the overlay recipe: Blank RT + BlendAlpha.
+// Overlay paints its own opaque chrome, then text. The main 1× pass must not
+// start here without a page fill — coverage-AA + LCD a<1 on Blank double on blit.
+func beginTransparentTexturePass(target rl.RenderTexture2D) {
+	rl.BeginTextureMode(target)
+	rl.ClearBackground(rl.Blank)
+	cam := rl.Camera2D{}
+	cam.Zoom = RenderScale
+	rl.BeginMode2D(cam)
+	rl.BeginBlendMode(rl.BlendAlpha)
+}
+
 // BeginOverlaySuperFrame starts a transparent supersampled pass for transient
 // overlays that must not become part of the cached main UI texture.
 func BeginOverlaySuperFrame() {
@@ -265,12 +436,7 @@ func BeginOverlaySuperFrame() {
 	}
 	overlayFrameActive = true
 	superFrameActive = true
-	rl.BeginTextureMode(overlayTarget)
-	rl.ClearBackground(rl.Blank)
-	cam := rl.Camera2D{}
-	cam.Zoom = RenderScale
-	rl.BeginMode2D(cam)
-	rl.BeginBlendMode(rl.BlendAlpha)
+	beginTransparentTexturePass(overlayTarget)
 }
 
 // EndOverlaySuperFrame closes the transparent overlay pass.
@@ -295,36 +461,51 @@ func BlitToScreen(dstW, dstH int32) {
 	BlitToScreenBorderless(dstW, dstH, false)
 }
 
-// BlitToScreenBorderless blits the SSAA target. Borderless uses alpha so RT
-// corners show the rounded fill drawn by BeginDrawingBorderless underneath.
-func BlitToScreenBorderless(dstW, dstH int32, borderless bool) {
-	if !SuperTargetDrawable() || dstW < 1 || dstH < 1 {
+// blitTargetToScreen is the one present: 1:1 DrawTexturePro, BlendAlpha, point
+// filter at SSAA 1× LCD. Menu/footer already used this recipe. Directory must
+// too — a second blit (opaque copy / bilinear / stretch) is what made the list
+// heavy while the overlay stayed Regular.
+func blitTargetToScreen(tex rl.Texture2D, dstW, dstH int32, alpha bool) {
+	if tex.ID == 0 || tex.Width < 1 || tex.Height < 1 || dstW < 1 || dstH < 1 {
 		return
 	}
-	tex := superTarget.Texture
+	if RenderScale <= 1.01 && PreferFTLCDChrome() {
+		rl.SetTextureFilter(tex, rl.FilterPoint)
+	}
 	src := rl.NewRectangle(0, 0, float32(tex.Width), -float32(tex.Height))
 	dst := rl.NewRectangle(0, 0, float32(dstW), float32(dstH))
-	if borderless {
+	if alpha {
 		rl.BeginBlendMode(rl.BlendAlpha)
 	}
 	rl.DrawTexturePro(tex, src, dst, rl.NewVector2(0, 0), 0, rl.White)
-	if borderless {
+	if alpha {
 		rl.EndBlendMode()
 	}
 }
 
-// BlitOverlayToScreen composites the transparent supersampled overlay target
-// over the already-blitted main UI.
-func BlitOverlayToScreen(dstW, dstH int32) {
-	if !OverlayTargetDrawable() || dstW < 1 || dstH < 1 {
+// BlitToScreenBorderless presents the main scene RT.
+// Hard rules for ClearType / lean (RenderScale=1, point filter):
+//   - NEVER stretch the RT into a different client size (fattened glyphs).
+//   - NEVER inset-blit a smaller RT into a larger cleared client (ghost layers).
+// SSAA 1× uses the overlay blit (alpha over the screen chrome fill — the gap).
+// SSAA >1 downscales; borderless still uses alpha for rounded corners.
+func BlitToScreenBorderless(dstW, dstH int32, borderless bool) {
+	if superTargetNeedsFill {
 		return
 	}
-	tex := overlayTarget.Texture
-	src := rl.NewRectangle(0, 0, float32(tex.Width), -float32(tex.Height))
-	dst := rl.NewRectangle(0, 0, float32(dstW), float32(dstH))
-	rl.BeginBlendMode(rl.BlendAlpha)
-	rl.DrawTexturePro(tex, src, dst, rl.NewVector2(0, 0), 0, rl.White)
-	rl.EndBlendMode()
+	if !SuperTargetDrawable() || PresentSizeMismatch(dstW, dstH) {
+		return
+	}
+	alpha := borderless || RenderScale <= 1.01
+	blitTargetToScreen(superTarget.Texture, dstW, dstH, alpha)
+}
+
+// BlitOverlayToScreen composites the overlay RT (menu, footer, inspector).
+func BlitOverlayToScreen(dstW, dstH int32) {
+	if !OverlayTargetDrawable() || PresentSizeMismatch(dstW, dstH) {
+		return
+	}
+	blitTargetToScreen(overlayTarget.Texture, dstW, dstH, true)
 }
 
 // SuperTargetDrawable reports whether the SSAA render target can be bound and
@@ -439,13 +620,14 @@ func DetectRenderCapability() RenderCapability {
 
 // RenderCapabilityString returns a human-readable label for the current tier.
 func RenderCapabilityString() string {
+	q := RenderQualityString()
 	switch CurrentRenderMode {
 	case RenderGPUFull:
-		return "GPU Full (MSAA + 2×SSAA + SDF)"
+		return "GPU Full (MSAA + SSAA + SDF) · " + q
 	case RenderGPUBasic:
-		return "GPU Basic (MSAA + 2×SSAA)"
+		return "GPU Basic (MSAA + SSAA) · " + q
 	default:
-		return "CPU Low (no SSAA)"
+		return "CPU Low (no SSAA) · " + q
 	}
 }
 

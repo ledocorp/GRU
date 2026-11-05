@@ -3,7 +3,7 @@
 Gru depends on third-party software. **Public credits** must appear in:
 
 1. Root [`NOTICE`](../../NOTICE)  
-2. GitHub README credits table — draft [`staging/PUBLIC_README.md`](../../staging/PUBLIC_README.md)
+2. Repository [`README.md`](../../README.md) credits table (export source: `staging/PUBLIC_README.md`)
 
 **Not legal advice.** Verify license texts before each public release.
 
@@ -25,9 +25,9 @@ Legacy API names may still say `Phosphor*`; the **runtime icon set is Remix Icon
 
 ## Before public GitHub push
 
-- [x] Credits table in `staging/PUBLIC_README.md` matches `NOTICE` (2026-07-29 audit)  
+- [x] Credits table in README / NOTICE aligned (2026-07-29 audit; re-check on tip sync)  
 - [x] `go-licenses` on public demo tags — snapshot `staging/go-licenses-grudemo.csv`  
-- [ ] No private apps (Notepad / Prism / Studio) in the published tree  
+- [ ] Tip-sync: export has no Foundry/Prism/full-Studio blank-imports (guardExport)  
 - [x] Font OFL texts present for bundled faces (Inter, Poppins, Fira Code, DM Mono)  
 
 ### Re-audit command

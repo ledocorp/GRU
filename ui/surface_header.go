@@ -65,24 +65,28 @@ func (h SurfaceHeader) Draw(shellBounds, fillBounds rl.Rectangle, bodyStyle Styl
 	}
 }
 
+// titleStripRoundness maps a pixel corner radius onto a short title-bar rect.
+// chromeRoundness(shellBounds) uses full panel height → near-zero roundness on
+// a ~36px title strip (square tops after C13 flush). Always use the strip’s
+// own shorter side so top corners stay ~cornerRadius px.
+func titleStripRoundness(titleRect rl.Rectangle, cornerRadiusPx float32) float32 {
+	return chromeRoundness(titleRect, cornerRadiusPx)
+}
+
 // drawTitleBar paints the dark panel title band and clips title text before chrome buttons.
+// Title geometry uses shellBounds (outer frame) so side edges align with the card;
+// roundness is computed on the title strip so top corners stay rounded (C14).
 func (h SurfaceHeader) drawTitleBar(shellBounds, fillBounds rl.Rectangle, bodyStyle Style, cornerRadius float32, titleH float32) {
+	_ = fillBounds
 	titleStyle := GetThemeStyle("panel-title")
-	titleRect := rl.NewRectangle(fillBounds.X, fillBounds.Y, fillBounds.Width, titleH)
-	if titleRect.Height > fillBounds.Height {
-		titleRect.Height = fillBounds.Height
+	titleRect := snapControlRect(rl.NewRectangle(shellBounds.X, shellBounds.Y, shellBounds.Width, titleH))
+	if titleRect.Height > shellBounds.Height {
+		titleRect.Height = shellBounds.Height
 	}
 	r := cornerRadius
 	if r > 0 {
-		shorter := titleRect.Width
-		if titleRect.Height < shorter {
-			shorter = titleRect.Height
-		}
-		rTitle := r / (shorter / 2)
-		if rTitle > 1 {
-			rTitle = 1
-		}
-		rl.DrawRectangleRounded(titleRect, rTitle, 32, titleStyle.BackgroundColor)
+		rTitle := titleStripRoundness(titleRect, cornerRadius)
+		rl.DrawRectangleRounded(titleRect, rTitle, 64, titleStyle.BackgroundColor)
 		if titleRect.Height > titleH/2 {
 			squareRect := rl.NewRectangle(titleRect.X, titleRect.Y+titleH/2, titleRect.Width, titleRect.Height-titleH/2)
 			rl.DrawRectangleRec(squareRect, titleStyle.BackgroundColor)
@@ -102,7 +106,9 @@ func (h SurfaceHeader) drawTitleBar(shellBounds, fillBounds rl.Rectangle, bodySt
 		clip := rl.NewRectangle(textLeft, titleRect.Y, textRight-textLeft, titleRect.Height)
 		beginScissorMode(int32(clip.X), int32(clip.Y), int32(clip.Width), int32(clip.Height))
 		textY := TextPosY(titleRect, titleDraw) - 1
+		popLCD := PushLCDSurfaceBackdrop(titleStyle.BackgroundColor)
 		drawTextS(h.Title, int32(textLeft+0.5), textY, titleDraw)
+		PopLCDSurfaceBackdrop(popLCD)
 		rl.EndScissorMode()
 	}
 
@@ -112,22 +118,14 @@ func (h SurfaceHeader) drawTitleBar(shellBounds, fillBounds rl.Rectangle, bodySt
 
 // drawTitleBarCollapsedPill paints header-only collapsed chrome (rounded on all corners).
 func (h SurfaceHeader) drawTitleBarCollapsedPill(shellBounds, fillBounds rl.Rectangle, cornerRadius float32, titleH float32) {
+	_ = fillBounds
+	_ = titleH
 	titleStyle := GetThemeStyle("panel-title")
-	titleRect := rl.NewRectangle(fillBounds.X, fillBounds.Y, fillBounds.Width, fillBounds.Height)
-	if titleRect.Height > fillBounds.Height {
-		titleRect.Height = fillBounds.Height
-	}
+	titleRect := snapControlRect(rl.NewRectangle(shellBounds.X, shellBounds.Y, shellBounds.Width, shellBounds.Height))
 	r := cornerRadius
 	if r > 0 {
-		shorter := titleRect.Width
-		if titleRect.Height < shorter {
-			shorter = titleRect.Height
-		}
-		rTitle := r / (shorter / 2)
-		if rTitle > 1 {
-			rTitle = 1
-		}
-		rl.DrawRectangleRounded(titleRect, rTitle, 32, titleStyle.BackgroundColor)
+		rTitle := titleStripRoundness(titleRect, cornerRadius)
+		rl.DrawRectangleRounded(titleRect, rTitle, 64, titleStyle.BackgroundColor)
 	} else {
 		rl.DrawRectangleRec(titleRect, titleStyle.BackgroundColor)
 	}
@@ -142,29 +140,25 @@ func (h SurfaceHeader) drawTitleBarCollapsedPill(shellBounds, fillBounds rl.Rect
 		clip := rl.NewRectangle(textLeft, titleRect.Y, textRight-textLeft, titleRect.Height)
 		beginScissorMode(int32(clip.X), int32(clip.Y), int32(clip.Width), int32(clip.Height))
 		textY := TextPosY(titleRect, titleDraw) - 1
+		popLCD := PushLCDSurfaceBackdrop(titleStyle.BackgroundColor)
 		drawTextS(h.Title, int32(textLeft+0.5), textY, titleDraw)
+		PopLCDSurfaceBackdrop(popLCD)
 		rl.EndScissorMode()
 	}
 }
 
 // drawTitleBarFlatBottom paints a standalone header strip: rounded top, square bottom.
 func (h SurfaceHeader) drawTitleBarFlatBottom(shellBounds, fillBounds rl.Rectangle, cornerRadius float32, titleH float32) {
+	_ = fillBounds
 	titleStyle := GetThemeStyle("panel-title")
-	titleRect := rl.NewRectangle(fillBounds.X, fillBounds.Y, fillBounds.Width, titleH)
-	if titleRect.Height > fillBounds.Height {
-		titleRect.Height = fillBounds.Height
+	titleRect := snapControlRect(rl.NewRectangle(shellBounds.X, shellBounds.Y, shellBounds.Width, titleH))
+	if titleRect.Height > shellBounds.Height {
+		titleRect.Height = shellBounds.Height
 	}
 	r := cornerRadius
 	if r > 0 {
-		shorter := titleRect.Width
-		if titleRect.Height < shorter {
-			shorter = titleRect.Height
-		}
-		rTitle := r / (shorter / 2)
-		if rTitle > 1 {
-			rTitle = 1
-		}
-		rl.DrawRectangleRounded(titleRect, rTitle, 32, titleStyle.BackgroundColor)
+		rTitle := titleStripRoundness(titleRect, cornerRadius)
+		rl.DrawRectangleRounded(titleRect, rTitle, 64, titleStyle.BackgroundColor)
 		if titleRect.Height > titleH/2 {
 			squareRect := rl.NewRectangle(titleRect.X, titleRect.Y+titleH/2, titleRect.Width, titleRect.Height-titleH/2)
 			rl.DrawRectangleRec(squareRect, titleStyle.BackgroundColor)
@@ -183,7 +177,9 @@ func (h SurfaceHeader) drawTitleBarFlatBottom(shellBounds, fillBounds rl.Rectang
 		clip := rl.NewRectangle(textLeft, titleRect.Y, textRight-textLeft, titleRect.Height)
 		beginScissorMode(int32(clip.X), int32(clip.Y), int32(clip.Width), int32(clip.Height))
 		textY := TextPosY(titleRect, titleDraw) - 1
+		popLCD := PushLCDSurfaceBackdrop(titleStyle.BackgroundColor)
 		drawTextS(h.Title, int32(textLeft+0.5), textY, titleDraw)
+		PopLCDSurfaceBackdrop(popLCD)
 		rl.EndScissorMode()
 	}
 }
@@ -198,12 +194,17 @@ func (h SurfaceHeader) drawInsetTitle(shellBounds rl.Rectangle, bodyStyle Style,
 	if bodyStyle.FontSize > 0 {
 		titleFont = bodyStyle.FontSize
 	}
-	textY := int32(shellBounds.Y) + (int32(titleH)-titleFont)/2
 	titleDraw := titleStyle
 	titleDraw.FontSize = titleFont
 	if bodyStyle.TextColor.A != 0 {
 		titleDraw.TextColor = bodyStyle.TextColor
 	}
+	// Leave a breath above the separator — raw FontSize center sat too low (code cards).
+	band := rl.NewRectangle(shellBounds.X, shellBounds.Y, shellBounds.Width, titleH-3)
+	if band.Height < 8 {
+		band.Height = titleH
+	}
+	textY := TextPosY(band, titleDraw)
 	drawTextS(h.Title, int32(shellBounds.X+titlePad+0.5), textY, titleDraw)
 
 	sepY := int32(shellBounds.Y + titleH)

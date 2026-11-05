@@ -220,12 +220,17 @@ func (ib *IconButton) Layout() {
 }
 
 // InteractionOverlayActive implements InteractionOverlayPainter.
+// Solid chrome already MarkDrawDirty on hover — overlay would double-paint.
+// Ghost chrome (appbar-icon) stays overlay-only so the cache can idle.
 func (ib *IconButton) InteractionOverlayActive() bool {
-	checked := ib.Checked != nil && ib.Checked.Get()
-	if ib.stackedRibbonCell() {
+	if ib == nil || ib.IsHidden() || ib.stackedRibbonCell() {
 		return false
 	}
-	return !ib.IsHidden() && (ib.hovered || ib.pressed || ib.Scale != 1.0 || checked)
+	if !ib.ghostChrome() {
+		return false
+	}
+	checked := ib.Checked != nil && ib.Checked.Get()
+	return ib.hovered || ib.pressed || ib.Scale != 1.0 || checked
 }
 
 // CollectRibbonIconWake returns WakeInput when the cursor is over a stacked
@@ -263,7 +268,8 @@ func (ib *IconButton) ghostChrome() bool {
 	return ib.GetStyle().BackgroundColor.A == 0
 }
 
-// DrawInteractionOverlay implements InteractionOverlayPainter.
+// DrawInteractionOverlay paints ghost hover chrome only. Solid buttons redraw
+// in the main RT (InteractionOverlayActive is false) so labels are not doubled.
 func (ib *IconButton) DrawInteractionOverlay() {
 	ib.drawChrome(ib.hovered, ib.pressed)
 	if !ib.ghostChrome() {
@@ -338,7 +344,7 @@ func (ib *IconButton) drawChrome(hovered, pressed bool) {
 			}
 			cy -= 1
 		}
-		rl.DrawCircleV(rl.NewVector2(cx, cy), r, hoverBg)
+		DrawCoverageCircle(cx, cy, r, hoverBg)
 	}
 }
 
@@ -354,6 +360,8 @@ func (ib *IconButton) drawContent() {
 
 	style, _ := ib.ResolveStyle(StyleStateNone)
 	rect := ib.scaledRect()
+	popLCD := PushLCDSurfaceBackdrop(ib.contentLCDFill())
+	defer PopLCDSurfaceBackdrop(popLCD)
 
 	// ── Content: icon + label centred as a group ──────────────────────────────
 	// Priority: vector → phosphor cache → file texture → symbol text
@@ -388,7 +396,7 @@ func (ib *IconButton) drawContent() {
 	}
 
 	startX := int32(content.X) + (int32(content.Width)-contentW)/2
-	textY := TextPosY(content, style)
+	textY := controlTextPosY(rect, style)
 
 	if hasVecIcon {
 		src := rl.NewRectangle(0, 0, float32(ib.vecTex.Width), float32(ib.vecTex.Height))
@@ -427,13 +435,36 @@ func (ib *IconButton) drawContent() {
 	drawTextS(label, startX, textY, style)
 }
 
+func (ib *IconButton) contentLCDFill() rl.Color {
+	if ib.ghostChrome() {
+		return rl.Color{}
+	}
+	style, stateApplied := ib.ResolveStyle(buttonStyleState(ib.hovered, ib.pressed))
+	if ib.styleName == "toolbar-btn" || ib.styleName == "toolbar-cell" {
+		checked := ib.Checked != nil && ib.Checked.Get() && !ib.SuppressCheckedChrome
+		if ib.styleName == "toolbar-cell" {
+			return toolbarCellOpaqueBackdrop(ib.hovered, ib.pressed, checked)
+		}
+		bg, _ := toolbarInteractionColors(ib.styleName, ib.hovered, ib.pressed, checked)
+		return bg
+	}
+	bg := style.BackgroundColor
+	if !stateApplied {
+		bg, _ = buttonInteractionColors(style, ib.hovered, ib.pressed)
+	}
+	return bg
+}
+
 // drawStackedRibbonCell lays out icon + caption inside a ribbon cell with even inner padding.
 func (ib *IconButton) drawStackedRibbonCell(style Style, cell rl.Rectangle, label string, hasPhosphor, hasVecIcon, hasTexIcon, hasSymIcon bool) {
 	const innerPad = float32(7)
 	capStyle := style
 	capStyle.FontSize = tbRibbonCaptionFS
-	labelH := EffectiveFontSize(capStyle)
-	textTop := cell.Y + cell.Height - innerPad - labelH
+	labelBox := TextLineBoxHeight(capStyle)
+	if labelBox < EffectiveFontSize(capStyle) {
+		labelBox = EffectiveFontSize(capStyle)
+	}
+	textTop := cell.Y + cell.Height - innerPad - labelBox
 	iconAreaH := textTop - cell.Y - innerPad
 	if iconAreaH < 10 {
 		iconAreaH = 10
@@ -460,7 +491,7 @@ func (ib *IconButton) drawStackedRibbonCell(style Style, cell rl.Rectangle, labe
 		rl.DrawTexturePro(ib.tex, src, dst, rl.NewVector2(0, 0), 0, style.TextColor)
 	} else if hasSymIcon {
 		symW := measureTextS(ib.Symbol, style)
-		drawTextS(ib.Symbol, int32(iconX+(iconSize-float32(symW))/2), int32(iconY+(iconSize-labelH)/2), style)
+		drawTextS(ib.Symbol, int32(iconX+(iconSize-float32(symW))/2), int32(iconY+(iconSize-labelBox)/2), style)
 	}
 	textW := measureTextS(label, capStyle)
 	maxLabelW := cell.Width - 2*innerPad
@@ -469,7 +500,11 @@ func (ib *IconButton) drawStackedRibbonCell(style Style, cell rl.Rectangle, labe
 		textW = measureTextS(label, capStyle)
 	}
 	tx := int32(cell.X + (cell.Width-float32(textW))/2)
-	ty := int32(textTop)
+	labelBand := rl.NewRectangle(cell.X+innerPad, textTop, cell.Width-2*innerPad, labelBox)
+	if labelBand.Height < 1 {
+		labelBand.Height = labelBox
+	}
+	ty := controlTextPosY(labelBand, capStyle)
 	drawTextS(label, tx, ty, capStyle)
 }
 

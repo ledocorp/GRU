@@ -717,13 +717,13 @@ func (pf *PanelFeaturesBehavior) DrawOverlay(sh *SurfaceShell) {
 }
 
 func (pf *PanelFeaturesBehavior) drawResizeGrips(sh *SurfaceShell) {
-	b := sh.Bounds()
-	alpha := uint8(36)
-	if pf.hoverResize != panelResizeNone {
-		alpha = 72
+	// Idle: no grip chrome (bottom edge looked like a sticky hover underline).
+	if pf.hoverResize == panelResizeNone {
+		return
 	}
-	col := rl.NewColor(60, 60, 80, alpha)
-	g := panelResizeGrip
+	b := sh.Bounds()
+	col := rl.NewColor(60, 60, 80, 36)
+	g := float32(8)
 	x2 := b.X + b.Width
 	y2 := b.Y + b.Height
 	rl.DrawTriangle(
@@ -738,11 +738,6 @@ func (pf *PanelFeaturesBehavior) drawResizeGrips(sh *SurfaceShell) {
 		rl.NewVector2(b.X, y2-g),
 		col,
 	)
-	midY := b.Y + b.Height*0.45
-	rl.DrawLine(int32(b.X), int32(midY), int32(b.X), int32(y2-2), col)
-	rl.DrawLine(int32(x2-1), int32(midY), int32(x2-1), int32(y2-2), col)
-	midX := b.X + b.Width*0.5
-	rl.DrawLine(int32(midX), int32(y2-1), int32(x2-2), int32(y2-1), col)
 }
 
 // panelContentTarget returns where AddChild should attach user content.

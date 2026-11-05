@@ -493,11 +493,11 @@ func (m *contextMenuManager) drawMenuBox(
 
 		rr := rl.NewRectangle(x+style.Padding, rowY, m.menuW-style.Padding*2, m.itemH)
 
-		// Hover highlight.
+		// Hover highlight (G1.1 coverage — avoids jagged row pills at SSAA 1×).
 		if hovered == i {
 			hoverBg := styleHover.BackgroundColor
 			hoverBg.A = uint8(float32(hoverBg.A) * alphaf)
-			rl.DrawRectangleRounded(rr, rowRound, contextMenuRoundSegments, hoverBg)
+			DrawRoundedFill(rr, rowRound, hoverBg)
 		}
 
 		// Label text.
@@ -529,16 +529,16 @@ func (m *contextMenuManager) drawMenuBox(
 			drawTextS(item.Shortcut, int32(trail-sw), TextPosY(rr, shortcutStyle), shortcutStyle)
 		}
 
-		// Right-pointing arrow for sub-menu items.
+		// Right-pointing caret for sub-menu items.
 		if len(item.SubItems) > 0 {
-			arrowMY := rowY + m.itemH/2
-			arrowR := x + m.menuW - style.Padding - 2
-			rl.DrawTriangle(
-				rl.NewVector2(arrowR-7, arrowMY-4),
-				rl.NewVector2(arrowR-7, arrowMY+4),
-				rl.NewVector2(arrowR, arrowMY),
-				textColor,
-			)
+			iconSize := float32(14)
+			dst := snapPhosphorRect(rl.NewRectangle(
+				x+m.menuW-style.Padding-iconSize-2,
+				rowY+(m.itemH-iconSize)/2,
+				iconSize, iconSize,
+			))
+			Phosphor.EnsureLoaded(PhosphorCaretRight, PhosphorFill)
+			Phosphor.Draw(dst, PhosphorCaretRight, PhosphorFill, textColor)
 		}
 
 		rowY += m.itemH

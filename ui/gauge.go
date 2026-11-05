@@ -10,7 +10,6 @@ import (
 const (
 	gaugeArcStart = float32(135)
 	gaugeArcEnd   = float32(405) // 270° sweep
-	gaugeSegments = int32(48)
 )
 
 // Gauge is a radial 0..1 progress indicator (Strategy 2 #26).
@@ -73,8 +72,7 @@ func (g *Gauge) drawInternal() {
 		fill = rl.NewColor(79, 70, 229, 255)
 	}
 
-	center := rl.NewVector2(cx, cy)
-	rl.DrawRing(center, inner, outer, gaugeArcStart, gaugeArcEnd, gaugeSegments, track)
+	DrawCoverageRingSharp(cx, cy, inner, outer, gaugeArcStart, gaugeArcEnd, track)
 
 	v := g.Value.Get()
 	if v < 0 {
@@ -85,7 +83,7 @@ func (g *Gauge) drawInternal() {
 	}
 	if v > 0.001 {
 		end := gaugeArcStart + (gaugeArcEnd-gaugeArcStart)*v
-		rl.DrawRing(center, inner, outer, gaugeArcStart, end, gaugeSegments, fill)
+		DrawCoverageRingSharp(cx, cy, inner, outer, gaugeArcStart, end, fill)
 	}
 
 	pctStyle := style

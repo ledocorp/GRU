@@ -1,6 +1,6 @@
-# Gru cheatsheet (v0.7.2)
+# Gru cheatsheet (v0.9.0)
 
-Fingertip lookup for the public toolkit **as shipped in v0.7.2**. Guides teach; this page answers *what exists* and *where to jump*.
+Fingertip lookup for the public toolkit **as shipped in v0.9.0**. Guides teach; this page answers *what exists* and *where to jump*.
 
 **Module:** `github.com/ledocorp/gru` · **Package:** `ui`  
 **Site:** [ledocorp.org/gru/docs/cheatsheet](https://www.ledocorp.org/gru/docs/cheatsheet/)  
@@ -24,7 +24,7 @@ Scan Status ≠ `ok` before a release. That list *is* the gap backlog.
 ## 1. Commands
 
 ```bash
-go get github.com/ledocorp/gru@v0.7.2
+go get github.com/ledocorp/gru@v0.9.0
 go run ./cmd/hello
 go run -tags webview2 ./cmd/webviewhello
 go run -tags grudemo .
@@ -49,7 +49,7 @@ CLI details: [CLI.md](CLI.md).
 DrainQueue
 Update (title bar + Root)
 Layout if Root dirty
-Draw into SSAA if NeedsRedraw, else blit cache
+Draw into render target if NeedsRedraw (default 1× framebuffer), else blit cache
 Present + overlays
 [WebView: sync hosts after Layout; present after EndDrawing]
 ```
@@ -173,7 +173,7 @@ Contracts: [architecture/overview.md](architecture/overview.md).
 | `Node` / `Element` / dirty | any | [api/node-element.md](api/node-element.md) · architecture/overview | ok |
 | Chrome / `TitleBar` / borderless mount | hello · shells | [api/mount-chrome.md](api/mount-chrome.md) | ok |
 | `DrainQueue` / `QueueMain` | hello | document.md | ok |
-| `NeedsRedraw` / SSAA blit | (engine) | architecture/rendering.md | ok |
+| `NeedsRedraw` / frame cache blit | (engine) | architecture/rendering.md | ok |
 | Focus routing | Focus Handoff · overlays | architecture/input-focus.md | ok |
 | Viewport scroll | many shells | architecture/layout.md | ok |
 
@@ -198,14 +198,12 @@ Contracts: [architecture/overview.md](architecture/overview.md).
 | pkgsite / `go doc` | — | [api/README.md](api/README.md) | ok |
 | CI link / doc drift checker | — | — | missing |
 
-### Related / private
+### Separate repos (not this package)
 
 | Symbol | Status |
 |--------|--------|
-| Gru Notepad showcase | separate repo: [shawnlondono/gru-notepad](https://github.com/shawnlondono/gru-notepad) |
-| Prism | private |
-| Studio harness / full catalog | private |
-| Foundry | private |
+| Gru Notepad showcase | separate repo · [shawnlondono/gru-notepad](https://github.com/shawnlondono/gru-notepad) |
+| Other LedoCorp apps / tools | maintained outside this repository |
 
 ---
 
@@ -219,7 +217,7 @@ Contracts: [architecture/overview.md](architecture/overview.md).
 6. Do not assume WebView click-through / passthrough; occlude the HWND when overlays need hits.
 7. Do not forget `assets/fonts/` must resolve at runtime.
 8. Do not mix shell recipes casually; pick one shell ID per scene.
-9. Do not treat `@latest` as pinned; prefer `@v0.7.2` until you mean to float.
+9. Do not treat `@latest` as pinned; prefer `@v0.9.0` until you mean to float.
 10. Do not document private apps as public capabilities.
 
 ---
@@ -233,7 +231,9 @@ Contracts: [architecture/overview.md](architecture/overview.md).
 | **F11** | Perf overlay (optional) |
 | Footer **Scenes** | Open Demo Index |
 | **Shift+F11** | WebView stderr traces (when debug on) |
-| `GRU_WEBVIEW_DEBUG=1` | WebView debug (alias `GORY_WEBVIEW_DEBUG`) |
+| `GRU_WEBVIEW_DEBUG=1` | WebView debug |
+| `GRU_SSAA=1\|1.5\|2` | Optional framebuffer scale (default **1×** when unset) |
+| `GRU_RENDER_QUALITY=max\|balanced\|lean\|minimal` | Render quality presets (see [architecture/rendering.md](architecture/rendering.md)) |
 
 ---
 
@@ -247,7 +247,7 @@ Before each public cut:
 4. Private products stay `private`, never `ok`.
 5. Prefer fixing `demo-thin` / `doc-thin` over adding aspirational `missing` rows.
 
-### Triage (closed in v0.7.1)
+### Triage (closed in tip-sync / v0.9.0 prep)
 
 Closed in this release:
 
@@ -268,4 +268,4 @@ Still accepted later (not blockers):
 
 ---
 
-*Gru (GRU) · v0.7.2 · GPLv3 · LedoCorp*
+*Gru (GRU) · v0.9.0 · GPLv3 · LedoCorp*

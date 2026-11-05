@@ -3,6 +3,9 @@
 package ui
 
 import (
+	"fmt"
+	"strings"
+
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
@@ -23,8 +26,12 @@ var SDFFont rl.Font
 var sdfShader rl.Shader     // normal weight — edge at 0.50
 var sdfShaderBold rl.Shader // bold weight   — edge at 0.41 (glyph expands ~9%)
 
-// sdfReady is true after InitSDFFont succeeds.
+// sdfReady is true after InitSDFFont succeeds (full chrome SDF atlas).
 var sdfReady bool
+
+// sdfShaderReady is true when SDF shaders are loaded for aux faces (mono /
+// PreviewFont) without a chrome SDF atlas — S1 ft-grey chrome path.
+var sdfShaderReady bool
 
 // LoadedUIFontPath is the TTF file path used by InitFonts or InitSDFFont, or ""
 // when no candidate loaded (raylib default text is used). For F6 typography debug.
@@ -38,8 +45,23 @@ var sdfGlyphs []rl.GlyphInfo
 // Both shaders use fwidth()-based adaptive smoothing: the AA band automatically
 // scales with glyph screen size, giving sharp edges at large sizes and smooth
 // AA at small sizes — identical to GPU-accelerated text in Flutter/Skia.
+//
+// When framebuffer SSAA is reduced (lean / 1×), [sdfAAWidthFactor] widens the
+// band so Latin chrome is less stair-steppy without MSDF (GRP-4).
 
-const sdfFragNormal = `#version 330
+func sdfAAWidthFactor() float32 {
+	s := EffectiveSupersamplingScale()
+	if s <= 1.01 {
+		return 1.2
+	}
+	if s <= 1.51 {
+		return 0.95
+	}
+	return 0.75
+}
+
+func sdfFragSource(edge, aaWidth float32) string {
+	return fmt.Sprintf(`#version 330
 in vec2 fragTexCoord;
 in vec4 fragColor;
 uniform sampler2D texture0;
@@ -47,26 +69,11 @@ uniform vec4 colDiffuse;
 out vec4 finalColor;
 void main() {
     float dist = texture(texture0, fragTexCoord).a;
-    float w = fwidth(dist) * 0.75;
-    float alpha = smoothstep(0.50 - w, 0.50 + w, dist);
+    float w = fwidth(dist) * %.3f;
+    float alpha = smoothstep(%.2f - w, %.2f + w, dist);
     finalColor = vec4(fragColor.rgb * colDiffuse.rgb, fragColor.a * colDiffuse.a * alpha);
-}`
-
-// Bold variant: edge shifted from 0.50 → 0.41, expanding the glyph outline by
-// ~9% of the SDF range, which produces a convincing weight increase without a
-// separate bold TTF.
-const sdfFragBold = `#version 330
-in vec2 fragTexCoord;
-in vec4 fragColor;
-uniform sampler2D texture0;
-uniform vec4 colDiffuse;
-out vec4 finalColor;
-void main() {
-    float dist = texture(texture0, fragTexCoord).a;
-    float w = fwidth(dist) * 0.75;
-    float alpha = smoothstep(0.41 - w, 0.41 + w, dist);
-    finalColor = vec4(fragColor.rgb * colDiffuse.rgb, fragColor.a * colDiffuse.a * alpha);
-}`
+}`, aaWidth, edge, edge)
+}
 
 // ─── Configuration ───────────────────────────────────────────────────────────
 
@@ -79,16 +86,52 @@ const FontSpacing = float32(0.3)
 const GlobalFontScale = float32(1.0)
 
 // fontCandidates — default UI body font (menus, labels, chrome). NOT mono.
+// Segoe first on Windows (hinted, sharper small UI). Bundled Poppins is opt-in via
+// putting it first only when GRU_UI_FONT=poppins (see PreferBundledUIFont).
 // Fira Code is editor/code only — see monoFontCandidates in font_stack.go.
 var fontCandidates = []string{
 	"C:/Windows/Fonts/segoeui.ttf",
 	"C:/Windows/Fonts/segoeuib.ttf",
 	"assets/fonts/poppins/Poppins-Regular.ttf",
 	"assets/fonts/Poppins/static/Poppins-Regular.ttf",
+	"assets/fonts/Poppins-Regular.ttf",
 	"assets/fonts/Roboto-Regular.ttf",
 	"C:/Windows/Fonts/calibri.ttf",
 	"C:/Windows/Fonts/tahoma.ttf",
 	"C:/Windows/Fonts/arial.ttf",
+}
+
+// resolvedFontCandidates returns fontCandidates, optionally preferring Poppins.
+func resolvedFontCandidates() []string {
+	v := strings.ToLower(strings.TrimSpace(EnvOr("GRU_UI_FONT", "GORY_UI_FONT")))
+	if v == "poppins" || v == "bundled" {
+		return []string{
+			"assets/fonts/poppins/Poppins-Regular.ttf",
+			"assets/fonts/Poppins/static/Poppins-Regular.ttf",
+			"assets/fonts/Poppins-Regular.ttf",
+			"C:/Windows/Fonts/segoeui.ttf",
+			"C:/Windows/Fonts/segoeuib.ttf",
+			"assets/fonts/Roboto-Regular.ttf",
+			"C:/Windows/Fonts/calibri.ttf",
+			"C:/Windows/Fonts/tahoma.ttf",
+			"C:/Windows/Fonts/arial.ttf",
+		}
+	}
+	return fontCandidates
+}
+
+// UIFontFaceSummary returns the active UI TTF basename for dogfood logs.
+func UIFontFaceSummary() string {
+	p := LoadedUIFontPath
+	if p == "" {
+		return "none"
+	}
+	for i := len(p) - 1; i >= 0; i-- {
+		if p[i] == '/' || p[i] == '\\' {
+			return p[i+1:]
+		}
+	}
+	return p
 }
 
 func loadFontFromMemory(fileData []byte, atlasSize int32, cps []int32) rl.Font {
@@ -123,7 +166,7 @@ func InitFonts(atlasSize int32) {
 	for i, r := range cp {
 		cps[i] = int32(r)
 	}
-	for _, path := range fontCandidates {
+	for _, path := range resolvedFontCandidates() {
 		fileData, err := ReadAssetFile(path)
 		if err != nil {
 			continue
@@ -176,11 +219,9 @@ func sdfCodepoints() []rune {
 		'\u2248', // approximately ≈
 		'\u03C0', // pi π
 	)
-	// Box-drawing characters (U+2500–U+257F): used in separator labels like
-	// "── new section ──" and decorative dividers.
-	for r := rune(0x2500); r <= 0x257F; r++ {
-		cp = append(cp, r)
-	}
+	// Box-drawing omitted from the default SDF atlas — those glyphs oversized the
+	// atlas cells and spammed raylib "size bigger than expected" warnings. UI
+	// separators use theme borders; rare box chars can fall back to tofu.
 	return cp
 }
 
@@ -196,23 +237,25 @@ func InitSDFFont(sdfAtlasSize int32) bool {
 	}
 	// Bundled multi-face stack (Poppins/Inter) is opt-in; default is Segoe via fontCandidates below.
 	if useBundledUIFontStack && initUIFontStack(sdfAtlasSize) {
-		sdfShader = rl.LoadShaderFromMemory("", sdfFragNormal)
+		aa := sdfAAWidthFactor()
+		sdfShader = rl.LoadShaderFromMemory("", sdfFragSource(0.50, aa))
 		if sdfShader.ID == 0 {
 			unloadUIFontStack()
 			return false
 		}
-		sdfShaderBold = rl.LoadShaderFromMemory("", sdfFragBold)
+		sdfShaderBold = rl.LoadShaderFromMemory("", sdfFragSource(0.41, aa))
 		if sdfShaderBold.ID == 0 {
 			rl.UnloadShader(sdfShader)
 			unloadUIFontStack()
 			return false
 		}
 		sdfReady = true
+		sdfShaderReady = true
 		InitShapedFonts()
 		return true
 	}
 	// Legacy single-font fallback (Segoe / Roboto).
-	for _, path := range fontCandidates {
+	for _, path := range resolvedFontCandidates() {
 		fileData, err := ReadAssetFile(path)
 		if err != nil {
 			continue
@@ -251,12 +294,14 @@ func InitSDFFont(sdfAtlasSize int32) bool {
 		}
 
 		// Compile both weight variants. Empty vertex shader = raylib default.
-		sdfShader = rl.LoadShaderFromMemory("", sdfFragNormal)
+		// Bold: edge 0.41 expands outline ~9% without a separate bold TTF.
+		aa := sdfAAWidthFactor()
+		sdfShader = rl.LoadShaderFromMemory("", sdfFragSource(0.50, aa))
 		if sdfShader.ID == 0 {
 			rl.UnloadFont(SDFFont)
 			continue
 		}
-		sdfShaderBold = rl.LoadShaderFromMemory("", sdfFragBold)
+		sdfShaderBold = rl.LoadShaderFromMemory("", sdfFragSource(0.41, aa))
 		if sdfShaderBold.ID == 0 {
 			rl.UnloadShader(sdfShader)
 			rl.UnloadFont(SDFFont)
@@ -264,6 +309,7 @@ func InitSDFFont(sdfAtlasSize int32) bool {
 		}
 		sdfGlyphs = glyphs
 		sdfReady = true
+		sdfShaderReady = true
 		LoadedUIFontPath = path
 		InitShapedFonts()
 		return true
@@ -271,14 +317,67 @@ func InitSDFFont(sdfAtlasSize int32) bool {
 	return false
 }
 
+// ensureSDFShaders loads the SDF fragment shaders without a chrome atlas.
+// Used by InitS1AuxFonts so Fira (Mono) and Inter (PreviewFont) can draw under S1.
+func ensureSDFShaders() bool {
+	if AndroidGLES() {
+		return false
+	}
+	if sdfShaderReady && sdfShader.ID != 0 && sdfShaderBold.ID != 0 {
+		return true
+	}
+	aa := sdfAAWidthFactor()
+	sh := rl.LoadShaderFromMemory("", sdfFragSource(0.50, aa))
+	if sh.ID == 0 {
+		return false
+	}
+	bold := rl.LoadShaderFromMemory("", sdfFragSource(0.41, aa))
+	if bold.ID == 0 {
+		rl.UnloadShader(sh)
+		return false
+	}
+	if sdfShader.ID != 0 {
+		rl.UnloadShader(sdfShader)
+	}
+	if sdfShaderBold.ID != 0 {
+		rl.UnloadShader(sdfShaderBold)
+	}
+	sdfShader = sh
+	sdfShaderBold = bold
+	sdfShaderReady = true
+	return true
+}
+
+// InitS1AuxFonts loads Mono (Fira) + PreviewFont (Inter) on the same S1 sticky
+// LCD pattern as chrome Segoe (separate atlases, identical bake/draw).
+func InitS1AuxFonts() {
+	InitFTGreyAuxFaces()
+}
+
+// sdfFaceDrawReady reports whether SDF shader + a face atlas can draw (chrome or aux).
+func sdfFaceDrawReady(font rl.Font) bool {
+	if font.BaseSize <= 0 {
+		return false
+	}
+	return (sdfReady || sdfShaderReady) && sdfShader.ID != 0
+}
+
 // UnloadSDFFonts releases GPU and C resources. Call during shutdown.
 func UnloadSDFFonts() {
-	if sdfReady {
-		rl.UnloadShader(sdfShader)
-		rl.UnloadShader(sdfShaderBold)
+	if sdfReady || sdfShaderReady {
+		if sdfShader.ID != 0 {
+			rl.UnloadShader(sdfShader)
+		}
+		if sdfShaderBold.ID != 0 {
+			rl.UnloadShader(sdfShaderBold)
+		}
 		sdfReady = false
+		sdfShaderReady = false
 	}
 	sdfMeasureCacheClear()
+	unloadFTLCDFont()
+	unloadMSDFFont()
+	unloadFTGreyFont()
 	unloadUIFontStack()
 	unloadComplexScriptUIFont()
 	unloadShapedGlyphCache()
@@ -288,11 +387,35 @@ func UnloadSDFFonts() {
 	SDFFont = rl.Font{}
 }
 
-// UIFontBackend reports which raster path drawTextF uses ("sdf", "bitmap", or
-// "raylib-default"). Used by the F6 typography overlay and stderr report.
+// UIFontBackend reports which raster path drawTextF uses.
 func UIFontBackend() string {
 	if textEngineMode == TextEngineShaped && shapedUI.ready {
 		return "shaped"
+	}
+	if msdfActive(false, false) {
+		return "msdf"
+	}
+	if ftLCDActive(false, false) {
+		return "ft-lcd"
+	}
+	if ftGreyActive(false, false) {
+		if PreferFTGreyStrikes() {
+			n := 0
+			if ftGreyStrikes != nil {
+				n = len(ftGreyStrikes)
+			}
+			if PreferFTLCDChrome() {
+				if dwriteLCDAvailable() {
+					if n == 0 {
+						return "ft-grey+strikes+dwrite-lcd(empty!)"
+					}
+					return fmt.Sprintf("ft-grey+strikes+dwrite-lcd(%d)", n)
+				}
+				return fmt.Sprintf("ft-grey+strikes+lcd(%d)", n)
+			}
+			return fmt.Sprintf("ft-grey+strikes(%d)", n)
+		}
+		return "ft-grey"
 	}
 	if sdfReady {
 		return "sdf"
@@ -329,10 +452,22 @@ func drawTextF(text string, x, y, fontSize float32, color rl.Color, bold, italic
 			return
 		}
 	}
+	if msdfActive(mono, preview) {
+		drawTextMSDF(text, x, y, fontSize, color)
+		return
+	}
+	if ftLCDActive(mono, preview) {
+		drawTextFTLCD(text, x, y, fontSize, color)
+		return
+	}
+	if ftGreyActive(mono, preview) {
+		drawTextFTGreyKind(text, x, y, fontSize, color, ftFaceFromFlags(mono, preview), bold)
+		return
+	}
 	pos := rl.NewVector2(x, y)
 	font := pickUIFont(bold, italic, mono, preview)
 	useBoldShader := uiFontUsesBoldShader(bold, italic, mono, preview)
-	if sdfReady && font.BaseSize > 0 {
+	if sdfFaceDrawReady(font) {
 		shader := sdfShader
 		if useBoldShader {
 			shader = sdfShaderBold
@@ -360,11 +495,20 @@ func measureTextF(text string, fontSize float32, bold, italic, mono, preview boo
 }
 
 func measureTextSDF(text string, fontSize float32, bold, italic, mono, preview bool) float32 {
+	if msdfActive(mono, preview) {
+		return measureTextMSDF(text, fontSize)
+	}
+	if ftLCDActive(mono, preview) {
+		return measureTextFTLCD(text, fontSize)
+	}
+	if ftGreyActive(mono, preview) {
+		return measureTextFTGreyKind(text, fontSize, ftFaceFromFlags(mono, preview), bold)
+	}
 	useBoldShader := uiFontUsesBoldShader(bold, italic, mono, preview)
 	measureBold := bold && !useBoldShader
 	font := pickUIFont(measureBold, italic, mono, preview)
 	var w float32
-	if sdfReady && font.BaseSize > 0 {
+	if sdfFaceDrawReady(font) {
 		w = rl.MeasureTextEx(font, text, fontSize, FontSpacing).X
 	} else if fontReady {
 		w = rl.MeasureTextEx(DefaultFont, text, fontSize, FontSpacing).X
@@ -406,6 +550,9 @@ func EditorMeasureWidth(text string, s Style) float32 {
 // EffectiveFontSize returns the pixel size drawTextS/measureTextS will use
 // (FontDensity, MinFontSize, and minRenderPx clamp). Use for vertical centering
 // in widgets — do not use raw Style.FontSize for layout baselines.
+//
+// S1 (GRU_TEXT_STRIKES=1): sizes snap onto the sticky strike ladder so small
+// chrome (tabs, captions) draws 1:1 instead of fractional rem → soft Path A.
 func EffectiveFontSize(s Style) float32 {
 	// Theme FontSize tokens are authored in [TypeScaleReference] units (16px).
 	// RootFontSize is computed from window width (see type_scale.go) and acts
@@ -420,19 +567,78 @@ func EffectiveFontSize(s Style) float32 {
 	if fs < minRenderPx {
 		fs = minRenderPx
 	}
+	// Quantize onto sticky ladders whenever S1 strikes are on — do not wait for
+	// atlas ready (measure/layout before InitFTGrey must still hit exact sizes).
+	if PreferFTGreyStrikes() && PreferFTGreyChrome() {
+		switch {
+		case s.Mono:
+			fs = QuantizeFTGreyAuxSize(fs)
+		case s.PreviewFont:
+			fs = QuantizeFTGreyAuxSize(fs)
+		default:
+			fs = QuantizeFTGreyChromeSize(fs)
+		}
+	}
 	return fs
 }
 
 // TextPosY returns the Y coordinate to draw single-line text vertically centred
 // in bounds using [EffectiveFontSize].
 func TextPosY(bounds rl.Rectangle, s Style) int32 {
+	h := EffectiveFontSize(s)
+	// Sticky FT/DWrite ink can exceed rem fontSize — center on the real line box
+	// or tops/descenders clip inside Label scissors.
+	if ftGreyActive(s.Mono, s.PreviewFont) {
+		if box := TextLineBoxHeight(s); box > h {
+			h = box
+		}
+	}
+	if h > bounds.Height {
+		return int32(bounds.Y)
+	}
+	y := int32(bounds.Y) + (int32(bounds.Height)-int32(h))/2
+	if y < int32(bounds.Y) {
+		y = int32(bounds.Y)
+	}
+	return y
+}
+
+// controlTextPosYMath returns draw Y (line-box top) so a cap box of height cap
+// sits vertically centered in [boundsY, boundsY+boundsH].
+func controlTextPosYMath(boundsY, boundsH, cap, ascent float32) int32 {
+	if ascent < 1 {
+		ascent = 1
+	}
+	if cap < 1 {
+		cap = ascent * 0.75
+	}
+	if cap > ascent {
+		cap = ascent
+	}
+	mid := boundsY + boundsH*0.5
+	return int32(mid + cap*0.5 - ascent + 0.5)
+}
+
+// controlTextPosY centres labels in compact chrome (buttons, badges, chips).
+func controlTextPosY(bounds rl.Rectangle, s Style) int32 {
+	ascent := TextInkHeight(s)
+	cap := TextCapHeight(s)
 	fs := EffectiveFontSize(s)
-	return int32(bounds.Y) + (int32(bounds.Height)-int32(fs))/2
+	if ascent < 1 {
+		ascent = fs
+	}
+	if cap < 1 {
+		cap = fs * 0.75
+	}
+	return controlTextPosYMath(bounds.Y, bounds.Height, cap, ascent)
 }
 
 // toolbarTextPosY vertically centres toolbar face text using measured glyph height
 // (SDF cap height), which reads more balanced than TextPosY inside compact buttons.
 func toolbarTextPosY(bounds rl.Rectangle, s Style) int32 {
+	if msdfActive(s.Mono, s.PreviewFont) || ftLCDActive(s.Mono, s.PreviewFont) || ftGreyActive(s.Mono, s.PreviewFont) {
+		return controlTextPosY(bounds, s)
+	}
 	fs := EffectiveFontSize(s)
 	probe := "Ag"
 	var textH float32
@@ -458,6 +664,15 @@ func statusBarTextPosY(bounds rl.Rectangle, s Style) int32 {
 // toolbarTextHeight returns the rendered cap height for toolbar face text.
 func toolbarTextHeight(s Style) float32 {
 	fs := EffectiveFontSize(s)
+	if msdfActive(s.Mono, s.PreviewFont) {
+		return msdfInkHeight(fs)
+	}
+	if ftLCDActive(s.Mono, s.PreviewFont) {
+		return ftLCDInkHeight(fs)
+	}
+	if ftGreyActive(s.Mono, s.PreviewFont) {
+		return ftGreyInkHeightKind(fs, ftFaceFromFlags(s.Mono, s.PreviewFont), styleDrawBold(s))
+	}
 	if sdfReady {
 		return rl.MeasureTextEx(SDFFont, "Ag", fs, FontSpacing).Y
 	}
@@ -483,6 +698,15 @@ func TextInkBottomY(lineTopY float32, s Style) float32 {
 // caret ("pipe") so I-beam height matches Fira Code / UI face ink, not raw token size.
 func TextInkHeight(s Style) float32 {
 	fs := EffectiveFontSize(s)
+	if msdfActive(s.Mono, s.PreviewFont) {
+		return msdfInkHeight(fs)
+	}
+	if ftLCDActive(s.Mono, s.PreviewFont) {
+		return ftLCDInkHeight(fs)
+	}
+	if ftGreyActive(s.Mono, s.PreviewFont) {
+		return ftGreyInkHeightKind(fs, ftFaceFromFlags(s.Mono, s.PreviewFont), styleDrawBold(s))
+	}
 	font := pickUIFont(styleDrawBold(s), s.Italic, s.Mono, s.PreviewFont)
 	if sdfReady && font.BaseSize > 0 {
 		if h := rl.MeasureTextEx(font, "Ag", fs, FontSpacing).Y; h > 0 {
@@ -495,6 +719,55 @@ func TextInkHeight(s Style) float32 {
 		}
 	}
 	return fs
+}
+
+// drawStyledCaret paints the I-beam aligned to sticky-face ink (not the tall
+// line-box top from TextPosY). Using EffectiveFontSize from textTopY made the
+// pipe hang above Latin glyphs (search / inputs / editors).
+func drawStyledCaret(x, textTopY int32, s Style, col rl.Color) {
+	ink := TextInkHeight(s)
+	if ink < 1 {
+		ink = EffectiveFontSize(s)
+	}
+	box := EffectiveFontSize(s)
+	if ftGreyActive(s.Mono, s.PreviewFont) {
+		if lb := TextLineBoxHeight(s); lb > box {
+			box = lb
+		}
+	}
+	top := textTopY
+	if box > ink+0.5 {
+		top = textTopY + int32((box-ink)*0.5+0.5)
+	}
+	h := int32(ink + 0.5)
+	if h < 8 {
+		h = 8
+	}
+	rl.DrawLine(x, top, x, top+h, col)
+}
+
+// TextLineBoxHeight is ascent+descent for AutoHeight Labels (ft-grey sticky faces).
+// TextInkHeight alone under-sizes the scissor and clips descenders / bold tops.
+func TextLineBoxHeight(s Style) float32 {
+	fs := EffectiveFontSize(s)
+	if ftGreyActive(s.Mono, s.PreviewFont) {
+		return ftGreyLineBoxHeightKind(fs, ftFaceFromFlags(s.Mono, s.PreviewFont), styleDrawBold(s))
+	}
+	ink := TextInkHeight(s)
+	if ink > fs {
+		return ink + fs*0.2
+	}
+	return fs
+}
+
+// TextCapHeight returns typical capital ink height above the baseline.
+func TextCapHeight(s Style) float32 {
+	fs := EffectiveFontSize(s)
+	h := TextInkHeight(s)
+	if h > 1 && h < fs*1.05 {
+		return h
+	}
+	return fs * 0.75
 }
 
 // toolbarAccessoryY places a control of height h vertically centered on toolbar face text.
@@ -545,8 +818,51 @@ func measureText(text string, fontSize int32) int32 {
 }
 
 // chromeFontSize converts a theme token (e.g. 15) to the pixel size DrawText uses.
+// Under S1 strikes, snaps onto the sticky ladder (same as EffectiveFontSize chrome).
 func chromeFontSize(token float32) float32 {
-	return token * GlobalFontScale * typeScaleFactor()
+	fs := token * GlobalFontScale * typeScaleFactor()
+	if PreferFTGreyStrikes() && PreferFTGreyChrome() {
+		return QuantizeFTGreyChromeSize(fs)
+	}
+	return fs
+}
+
+// textSkipLCD suppresses ClearType LCD for draws over unknown/transparent backdrops.
+var textSkipLCD int
+
+// DrawTextOnTransparent draws S1 grey strikes without LCD (layered transparent hosts).
+func DrawTextOnTransparent(text string, x, y, fontSize float32, color rl.Color) {
+	textSkipLCD++
+	defer func() { textSkipLCD-- }()
+	drawTextF(text, x, y, chromeFontSize(fontSize), color, false, false, false, false)
+}
+
+// DrawTextOnTransparentBold is semibold [DrawTextOnTransparent].
+func DrawTextOnTransparentBold(text string, x, y, fontSize float32, color rl.Color) {
+	textSkipLCD++
+	defer func() { textSkipLCD-- }()
+	drawTextF(text, x, y, chromeFontSize(fontSize), color, true, false, false, false)
+}
+
+// MeasureTextOnTransparent matches [DrawTextOnTransparent] metrics.
+func MeasureTextOnTransparent(text string, fontSize float32) float32 {
+	textSkipLCD++
+	defer func() { textSkipLCD-- }()
+	return measureTextF(text, chromeFontSize(fontSize), false, false, false, false)
+}
+
+// MeasureTextOnTransparentDevicePx matches [DrawTextOnTransparentDevicePx].
+func MeasureTextOnTransparentDevicePx(text string, px float32) float32 {
+	textSkipLCD++
+	defer func() { textSkipLCD-- }()
+	return measureTextF(text, px, true, false, false, false)
+}
+
+// DrawTextOnTransparentDevicePx draws an exact device-px grey sticky over transparency.
+func DrawTextOnTransparentDevicePx(text string, x, y, px float32, color rl.Color) {
+	textSkipLCD++
+	defer func() { textSkipLCD-- }()
+	drawTextF(text, x, y, px, color, true, false, false, false)
 }
 
 // DrawText is a public SDF-aware text draw function for use by main.go and

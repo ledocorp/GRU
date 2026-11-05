@@ -9,14 +9,17 @@ import (
 func TestShapedGlyphRasterSSAA(t *testing.T) {
 	prev := BaseSupersamplingScale
 	prevDPI := DisplayScale
+	prevFloor := GlyphSupersampleFloor
 	BaseSupersamplingScale = 2
+	GlyphSupersampleFloor = 1 // follow scene SSAA for this assertion
 	DisplayScale = 1
 	defer func() {
 		BaseSupersamplingScale = prev
 		DisplayScale = prevDPI
+		GlyphSupersampleFloor = prevFloor
 	}()
 	if shapedGlyphRasterPx(16) != 32 {
-		t.Fatalf("raster px = %v, want 32 at 2x SSAA", shapedGlyphRasterPx(16))
+		t.Fatalf("raster px = %v, want 32 at 2x SSAA (floor 1)", shapedGlyphRasterPx(16))
 	}
 }
 

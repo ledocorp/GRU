@@ -8,13 +8,13 @@
 package main
 
 import (
+	"fmt"
 	"github.com/ledocorp/gru/devtools/studio"
 	"github.com/ledocorp/gru/examples"
 	"github.com/ledocorp/gru/examples/appinstance"
 	"github.com/ledocorp/gru/internal/appicon"
 	"github.com/ledocorp/gru/internal/tray"
 	"github.com/ledocorp/gru/ui"
-	"fmt"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -79,10 +79,26 @@ func readClientSizeClamped() (w, h int32) {
 }
 
 const (
-	navBarH      = 36
-	navDirBtnW   = float32(108)
-	navDirBtnPad = float32(8)
+	navBarH       = 36
+	navDirBtnMinW = float32(108)
+	navDirBtnPad  = float32(8)
 )
+
+func navDirectoryLabel() string {
+	if examples.PublicDemoMode() {
+		return "Scenes"
+	}
+	return "Directory"
+}
+
+func navDirectoryButtonWidth() float32 {
+	tw := ui.MeasureChromeText(navDirectoryLabel(), ui.ChromeFooterButtonStyle())
+	w := tw + 28
+	if w < navDirBtnMinW {
+		return navDirBtnMinW
+	}
+	return w
+}
 
 // demoNavBottom returns chrome reserved for the demo launcher footer, or 0 when hidden.
 func demoNavBottom(scene examples.Scene) int32 {
@@ -109,8 +125,9 @@ func navBarRect(windowW, windowH int32) rl.Rectangle {
 }
 
 func navDirectoryButtonRect(windowW, windowH int32) rl.Rectangle {
-	x := float32(windowW) - navDirBtnPad - navDirBtnW
-	return rl.NewRectangle(x, float32(windowH-navBarH)+6, navDirBtnW, float32(navBarH)-12)
+	w := navDirectoryButtonWidth()
+	x := float32(windowW) - navDirBtnPad - w
+	return rl.NewRectangle(x, float32(windowH-navBarH)+6, w, float32(navBarH)-12)
 }
 
 func slimNavHint(current, total int, title string) string {
@@ -139,15 +156,15 @@ func studioToolState(current, total int, title string, benchmarkMode, borderless
 func drawNavBar(windowW, windowH int32, navBg rl.Color) {
 	navRect := navBarRect(windowW, windowH)
 	rl.DrawRectangleRec(navRect, navBg)
-	btn := navDirectoryButtonRect(windowW, windowH)
-	rl.DrawRectangleRounded(btn, 0.25, 6, rl.NewColor(79, 70, 229, 255))
+	btn := ui.SnapControlRect(navDirectoryButtonRect(windowW, windowH))
+	ui.DrawRoundedTessInsetBorder(btn, 0.25, 1, rl.NewColor(140, 130, 255, 255), rl.NewColor(79, 70, 229, 255))
 }
 
 func drawNavBarLabels(windowW, windowH int32, hint string, textColor rl.Color) {
 	hintStyle := ui.ChromeFooterHintStyle()
 	hintStyle.TextColor = textColor
-	hintX := float32(92)
-	rightReserve := navDirBtnW + navDirBtnPad
+	hintX := examples.SampleHostHintX()
+	rightReserve := navDirectoryButtonWidth() + navDirBtnPad
 	hintRect := rl.NewRectangle(hintX, float32(windowH-navBarH), float32(windowW)-hintX-rightReserve, float32(navBarH))
 	hintY := ui.ChromeTextCenterY(hintRect, hintStyle)
 	ui.DrawChromeText(hint, hintX, hintY, hintStyle)
@@ -155,10 +172,7 @@ func drawNavBarLabels(windowW, windowH int32, hint string, textColor rl.Color) {
 	btn := navDirectoryButtonRect(windowW, windowH)
 	dirStyle := ui.ChromeFooterButtonStyle()
 	dirStyle.TextColor = rl.White
-	label := "Directory"
-	if examples.PublicDemoMode() {
-		label = "Scenes"
-	}
+	label := navDirectoryLabel()
 	tw := ui.MeasureChromeText(label, dirStyle)
 	dirX := btn.X + (btn.Width-tw)/2
 	dirY := ui.ChromeTextCenterY(btn, dirStyle)
@@ -166,9 +180,11 @@ func drawNavBarLabels(windowW, windowH int32, hint string, textColor rl.Color) {
 }
 
 // drawFooterOverlay paints the full launcher footer (backgrounds + labels) in the
-// SSAA overlay pass so text is not composited over a bilinear-downscaled bar.
+// overlay pass. That pass stayed Regular because it never used the SSAA-2×
+// recipe (opaque RT fill + blit). SSAA 1× Directory now shares that recipe.
 func drawFooterOverlay(windowW, windowH int32, navBg rl.Color, navHint string, navTextColor rl.Color, panel *studio.Panel, state studio.ToolState) {
 	drawNavBar(windowW, windowH, navBg)
+	examples.DrawSampleHostButtons(windowW, windowH)
 	drawNavBarLabels(windowW, windowH, navHint, navTextColor)
 	if panel != nil && !examples.PublicDemoMode() {
 		panel.PaintFooter(windowW, windowH, state)
@@ -227,12 +243,21 @@ func syncWindowFromDisplay(doc *ui.Document, titleBar *ui.TitleBar, borderless b
 		return
 	}
 	windowW, windowH = newW, newH
-	ui.ResizeWindowTextures(windowW, windowH)
-	if ui.ApplyDisplayAwareSupersampling(windowW, windowH) && doc != nil {
-		doc.UnloadCache()
+	// Live drag: defer GPU RT recreate (layout still runs). Do NOT call
+	// ApplyDisplayAwareSupersampling here — RescaleSupersampling forced
+	// ResizeWindowTextures every pixel and undid the defer (ARCHIVE contract:
+	// NOTEPAD_POLISH / GRU_CORE same-frame layout, never mid-drag Unload+Load).
+	// FlushPendingWindowTextures on settle; DPI/atlas path only when scale changes.
+	ui.DeferWindowTextures(windowW, windowH)
+	prevDPI := ui.DisplayScale
+	ui.RefreshDisplayScale()
+	if ui.DisplayScale != prevDPI {
+		if ui.ApplyDisplayAwareSupersampling(windowW, windowH) && doc != nil {
+			doc.UnloadCache()
+		}
 	}
-	// Update RootFontSize from window width (not height) before doc.Resize,
-	// so layout/measure uses the correct EffectiveFontSize immediately.
+	// Rem tracks width immediately — never leave hold stuck across a size change.
+	ui.SetTypeScaleResizeHold(false)
 	ui.RefreshTypeScaleFromWindow(windowW, windowH)
 	if doc != nil {
 		doc.Resize(windowW, windowH)
@@ -248,6 +273,30 @@ func syncWindowFromDisplay(doc *ui.Document, titleBar *ui.TitleBar, borderless b
 		applyNativeBorderlessRoundedCorners(titleBar.BorderlessRoundedChrome())
 		ui.SetBorderlessRoundedChrome(titleBar.BorderlessRoundedChrome())
 	}
+}
+
+// applyInFrameClientResize picks up SetWindowSize from titleBar.Update /
+// DrainFillClientChromeResize so layout + SSAA match the live client this frame.
+//
+// This is the resize gap fix without texture-hold: recreate RT + redraw before
+// blit. Do not revive WindowTextureHold / deferred wrap — that stretched the
+// old RT (point filter → bold ClearType) and is what broke font weight.
+func applyInFrameClientResize(doc *ui.Document, titleBar *ui.TitleBar, borderless bool, hold *ui.ResizeHoldTracker, now time.Time) bool {
+	prevW, prevH := windowW, windowH
+	syncWindowFromDisplay(doc, titleBar, borderless)
+	if windowW == prevW && windowH == prevH {
+		return false
+	}
+	// Per-pixel arm was stacking extra Root.Layout during edge drag; leave recovery
+	// to maximize/restore and chrome toggle paths.
+	if hold != nil {
+		hold.NoteDimensionChange(now)
+	}
+	ui.MarkWebViewHostsResize()
+	if doc != nil {
+		doc.InvalidatePaint()
+	}
+	return true
 }
 
 func toggleBorderlessChrome(
@@ -293,7 +342,7 @@ func main() {
 }
 
 func runApp() {
-	exit, stopInstance := examples.StartupInstance(examples.StartupOpenFilePath())
+	exit, stopInstance := startupProductInstance()
 	if exit {
 		return
 	}
@@ -318,16 +367,14 @@ func runApp() {
 	initW, initH := appInitWindowSize()
 	rl.InitWindow(initW, initH, appInitWindowTitle())
 	appinstance.RaiseRunningInstance = platformWindowFocus
-	if isAndroidApp() {
-		windowW = int32(rl.GetScreenWidth())
-		windowH = int32(rl.GetScreenHeight())
-		windowW, windowH = appNormalizeAndroidClientSize(windowW, windowH)
-		if windowW < 1 {
-			windowW = 360
-		}
-		if windowH < 1 {
-			windowH = 640
-		}
+	// Seed windowW/H from the real client immediately — do not keep init constants
+	// through rem/atlas/scene Build (desktop previously synced only on first frame).
+	windowW, windowH = readClientSizeClamped()
+	if windowW < 1 {
+		windowW = initW
+	}
+	if windowH < 1 {
+		windowH = initH
 	}
 	setupPlatformWindowHooks()
 	if appUsesCustomChrome() {
@@ -357,8 +404,11 @@ func runApp() {
 
 	// ── High-resolution font + icon atlases (T1.9 DPR-scaled source) ─────────
 	// Base sizes: 176 pt SDF/bitmap text, 512 pt Remix icons — scaled by DisplayScale
-	// (125% DPI → ~220 / ~640). SSAA stays separate; do not multiply SSAA × DPI.
+	// only (not by SSAA). Lean/SSAA=1 must not inflate atlases.
 	ui.RefreshDisplayScale()
+	// Rem before atlas/strike prewarm — 4-phase targets rem-body (~30 @ dpi 1.25),
+	// not the default RootFontSize=16 (which wrongly baked ph=4 on sticky 20).
+	ui.RefreshTypeScaleFromWindow(windowW, windowH)
 	ui.IconsEagerWarm = true // Studio catalog needs WarmGlyphNames at first paint
 	ui.InitDisplayAwareAtlases()
 	applyTextEngineMode()
@@ -376,14 +426,15 @@ func runApp() {
 	// HWND + GPU ready — re-apply icons after heavy init (matches prior “delayed but working” behavior).
 	appicon.ReapplyWindowIcon()
 	if debugVerbose() {
-		fmt.Printf("Gru render: text=%s  icons=%s  ssaa=%.1fx  dpi=%.2f  sdfAtlas=%d  remixAtlas=%d\n",
-			ui.TextEngineBackendName(), ui.Phosphor.IconFontSummary(), ui.EffectiveSupersamplingScale(),
+		fmt.Printf("Gru render: text=%s  font=%s  icons=%s  quality=%s  ssaa=%.1fx  glyphSSAA=%.1fx  dpi=%.2f  sdfAtlas=%d  remixAtlas=%d\n",
+			ui.TextEngineBackendName(), ui.UIFontFaceSummary(), ui.Phosphor.IconFontSummary(), ui.RenderQualityString(),
+			ui.EffectiveSupersamplingScale(), ui.EffectiveGlyphSupersample(),
 			ui.DisplayScale, ui.EffectiveSDFAtlasSize(), ui.EffectiveRemixAtlasSize())
 	} else if appReleaseMode() {
 		// One stderr line for ship-gate render verification (§A.4); no idle/resize spam.
 		fmt.Fprintln(os.Stderr, notepadReleaseRenderLine())
 	}
-	// Seed RootFontSize once at startup. Resize events later keep it in sync.
+	// Rem already seeded above; keep in sync if window size changed during atlas init.
 	ui.RefreshTypeScaleFromWindow(windowW, windowH)
 	ui.Toasts.SetWindowSize(windowW, windowH)
 	ui.NotificationCenterMgr.SetWindowSize(windowW, windowH)
@@ -438,6 +489,16 @@ func runApp() {
 	titleBar.HandleResize = true
 	titleBar.DrawLeadingIcon = appicon.DrawTitleBarIcon
 	titleBar.ResetPos()
+	// DWM / borderless chrome can change client size after HWND hooks; re-sync
+	// before first scene Build so rem + layout match the first painted frame.
+	windowW, windowH = readClientSizeClamped()
+	if windowW < 1 {
+		windowW = initW
+	}
+	if windowH < 1 {
+		windowH = initH
+	}
+	ui.RefreshTypeScaleFromWindow(windowW, windowH)
 	titleBar.SetSize(windowW, windowH)
 
 	// ── Scene lifecycle helpers ───────────────────────────────────────────────
@@ -462,6 +523,7 @@ func runApp() {
 		if activeScene != nil {
 			activeScene.Destroy()
 		}
+		ui.ReleaseSceneResources(doc)
 		ui.ResetTransientOverlays()
 		ui.ClearTooltipEntries()
 		activeScene = factories[index]()
@@ -511,6 +573,29 @@ func runApp() {
 		sc.Destroy()
 	}
 
+	// Reveal before first Build so GetScreenWidth is the real client (hidden GLFW
+	// often reports init 1280 → rem 24, then settles to ~1024 → rem 22 later).
+	startupWindowRevealed := false
+	if !isAndroidApp() && rl.IsWindowHidden() {
+		rl.ClearWindowState(uint32(rl.FlagWindowHidden))
+		platformWindowFocus()
+		startupWindowRevealed = true
+		appicon.ReapplyWindowIcon()
+		if appUsesCustomChrome() {
+			applyNativeBorderlessRoundedCorners(true)
+		}
+	}
+	windowW, windowH = readClientSizeClamped()
+	if windowW < 1 {
+		windowW = initW
+	}
+	if windowH < 1 {
+		windowH = initH
+	}
+	ui.SetTypeScaleResizeHold(false)
+	ui.RefreshTypeScaleFromWindow(windowW, windowH)
+	titleBar.SetSize(windowW, windowH)
+
 	loadScene(current)
 	if appReleaseMode() {
 		ui.ShowPerfOverlay = false
@@ -519,7 +604,7 @@ func runApp() {
 	// ── Launcher UI (always-on-top nav bar) ───────────────────────────────────
 	navBg := rl.NewColor(30, 32, 42, 255)
 	navTextColor := rl.NewColor(200, 202, 215, 255)
-	bgColor := rl.NewColor(228, 229, 235, 255)
+	bgColor := ui.WindowChromeFill()
 
 	var frameCount int // used for periodic cache-hit-rate logging
 
@@ -537,10 +622,14 @@ func runApp() {
 	var resizeHoldWasActive bool
 	var pendingNavWake ui.WakeSummary
 	var lastWindowMaximized bool
-	windowShown := false // desktop starts FlagWindowHidden; reveal after first present
+	windowShown := startupWindowRevealed // may already be visible (reveal-before-Build)
 	taskbarIconAfterFrame := false
 	var lastSceneSwitch time.Time
 	const sceneSwitchDebounce = 180 * time.Millisecond
+
+	if startupWindowRevealed {
+		idlePolicy.NoteSceneLoad(time.Now())
+	}
 
 	switchScene := func(next int) {
 		now := time.Now()
@@ -639,6 +728,7 @@ func runApp() {
 			break
 		}
 		frameStart := time.Now()
+		bgColor = ui.WindowChromeFill()
 		windowFocused := rl.IsWindowFocused()
 		frameWake := ui.DrainWakeSignals()
 		ui.PreparePointerInput()
@@ -689,6 +779,11 @@ func runApp() {
 		}
 
 		prevW, prevH := windowW, windowH
+		// Gate AutoHeight / preview remasure before sync→Resize→Root.Layout.
+		if borderless && (titleBar.IsResizing() || ui.FillClientChromeResizing() ||
+			int32(rl.GetScreenWidth()) != windowW || int32(rl.GetScreenHeight()) != windowH) {
+			ui.SetChromeWindowMoving(true)
+		}
 		syncWindowFromDisplay(doc, titleBar, borderless)
 		// Borderless edge drag updates the OS client area in-frame; run title bar
 		// before resize hold so IsResizing() matches the current gesture.
@@ -703,15 +798,20 @@ func runApp() {
 		// true at the minimum width and was forcing full relayout every frame.
 		frameResized := dimChanged
 		if frameResized {
-			ui.ArmViewportScrollRecovery(2)
+			// Do not ArmViewportScrollRecovery on every drag pixel — that forced an
+			// extra full Root.Layout per frame mid-resize (F7 layout~70ms). Arm on
+			// maximize/restore / chrome toggle only (see below + F9 path).
 			resizeHold.NoteDimensionChange(frameStart)
 			ui.MarkWebViewHostsResize()
-			doc.ForceFullLayout()
+			// syncWindowFromDisplay already ran Document.Resize (shell flex).
+			// ForceFullLayout every resize frame walked the whole tree + cleared
+			// text measures — Responsive + Notepad felt stuck at ~8 redraws/s.
 			doc.InvalidatePaint()
 		}
 		if rl.IsWindowReady() {
 			zoomed := rl.IsWindowMaximized()
 			if zoomed != lastWindowMaximized {
+				ui.ArmViewportScrollRecovery(2)
 				ui.NotifyWebViewLayoutJump()
 				doc.InvalidatePaint()
 				lastWindowMaximized = zoomed
@@ -732,6 +832,15 @@ func runApp() {
 				lastTargetFPS = ui.ActiveFPS
 			}
 		}
+		// Rem always tracks current client width immediately (no freeze / no delayed
+		// band flip). Relayout only when the rem band actually changes.
+		ui.SetTypeScaleResizeHold(false)
+		prevRem := ui.RootFontSize
+		ui.RefreshTypeScaleFromWindow(windowW, windowH)
+		if ui.RootFontSize != prevRem {
+			doc.ForceFullLayout()
+			doc.InvalidatePaint()
+		}
 
 		navHint := slimNavHint(current, len(factories), activeScene.Title())
 
@@ -745,52 +854,52 @@ func runApp() {
 
 		// ── Input: debug keys (dev builds only) ─────────────────────────────
 		if !appReleaseMode() {
-		// ── Input: F5 — caret / space / idle trace (see debug_caret.go) ────────
-		if rl.IsKeyPressed(rl.KeyF5) {
-			frameWake.Add(ui.WakeKeyboard, "f5")
-			toggleCaretDebug()
-		}
+			// ── Input: F5 — caret / space / idle trace (see debug_caret.go) ────────
+			if rl.IsKeyPressed(rl.KeyF5) {
+				frameWake.Add(ui.WakeKeyboard, "f5")
+				toggleCaretDebug()
+			}
 
-		// ── Input: F7 — resize FPS / idle policy trace (see debug_resize_fps.go) ──
-		if rl.IsKeyPressed(rl.KeyF7) {
-			frameWake.Add(ui.WakeKeyboard, "f7")
-			toggleResizeFPSDebug()
-		}
+			// ── Input: F7 — resize FPS / idle policy trace (see debug_resize_fps.go) ──
+			if rl.IsKeyPressed(rl.KeyF7) {
+				frameWake.Add(ui.WakeKeyboard, "f7")
+				toggleResizeFPSDebug()
+			}
 
-		// ── Input: F10 — draw-dirty node trace (see debug_draw_dirty.go) ───────
-		if rl.IsKeyPressed(rl.KeyF10) {
-			frameWake.Add(ui.WakeKeyboard, "f10")
-			toggleDrawDirtyDebug()
-		}
+			// ── Input: F10 — draw-dirty node trace (see debug_draw_dirty.go) ───────
+			if rl.IsKeyPressed(rl.KeyF10) {
+				frameWake.Add(ui.WakeKeyboard, "f10")
+				toggleDrawDirtyDebug()
+			}
 
-		// ── Input: WebView passthrough trace (GRU_WEBVIEW_DEBUG=1 only) ───────
-		if rl.IsKeyDown(rl.KeyLeftShift) && rl.IsKeyPressed(rl.KeyF11) {
-			frameWake.Add(ui.WakeKeyboard, "f11")
-			toggleWebViewDebug()
-		}
+			// ── Input: WebView passthrough trace (GRU_WEBVIEW_DEBUG=1 only) ───────
+			if rl.IsKeyDown(rl.KeyLeftShift) && rl.IsKeyPressed(rl.KeyF11) {
+				frameWake.Add(ui.WakeKeyboard, "f11")
+				toggleWebViewDebug()
+			}
 
-		// ── Input: F8 — isolated resize propagation log (stderr, see debug_resize.go) ──
-		if rl.IsKeyPressed(rl.KeyF8) {
-			frameWake.Add(ui.WakeKeyboard, "f8")
-			TestResizePropagation()
-		}
+			// ── Input: F8 — isolated resize propagation log (stderr, see debug_resize.go) ──
+			if rl.IsKeyPressed(rl.KeyF8) {
+				frameWake.Add(ui.WakeKeyboard, "f8")
+				TestResizePropagation()
+			}
 
-		// ── Input: F6 toggles one-line/sec benchmark logging ─────────────────
-		if rl.IsKeyPressed(rl.KeyF6) {
-			frameWake.Add(ui.WakeKeyboard, "f6")
-			benchmarkMode = !benchmarkMode
-			benchmarkLastLog = frameStart
-			benchmarkFrames, benchmarkRedraws, benchmarkBlits = 0, 0, 0
-			fmt.Printf("Gru benchmark logging: %v  (text=%s  icons=%s  dpi=%.2f  sdfAtlas=%d  remixAtlas=%d)\n",
-				benchmarkMode, ui.UIFontBackend(), ui.Phosphor.IconFontSummary(),
-				ui.DisplayScale, ui.EffectiveSDFAtlasSize(), ui.EffectiveRemixAtlasSize())
-		}
+			// ── Input: F6 toggles one-line/sec benchmark logging ─────────────────
+			if rl.IsKeyPressed(rl.KeyF6) {
+				frameWake.Add(ui.WakeKeyboard, "f6")
+				benchmarkMode = !benchmarkMode
+				benchmarkLastLog = frameStart
+				benchmarkFrames, benchmarkRedraws, benchmarkBlits = 0, 0, 0
+				fmt.Printf("Gru benchmark logging: %v  (text=%s  icons=%s  dpi=%.2f  sdfAtlas=%d  remixAtlas=%d)\n",
+					benchmarkMode, ui.UIFontBackend(), ui.Phosphor.IconFontSummary(),
+					ui.DisplayScale, ui.EffectiveSDFAtlasSize(), ui.EffectiveRemixAtlasSize())
+			}
 
-		// ── Input: F11 toggles perf overlay in nav bar ────────────────────────
-		if rl.IsKeyPressed(rl.KeyF11) {
-			frameWake.Add(ui.WakeKeyboard|ui.WakeOverlay, "f11")
-			ui.ShowPerfOverlay = !ui.ShowPerfOverlay
-		}
+			// ── Input: F11 toggles perf overlay in nav bar ────────────────────────
+			if rl.IsKeyPressed(rl.KeyF11) {
+				frameWake.Add(ui.WakeKeyboard|ui.WakeOverlay, "f11")
+				ui.ShowPerfOverlay = !ui.ShowPerfOverlay
+			}
 		} // end !appReleaseMode debug keys
 
 		// ── Input: F9 toggles borderless window + custom title bar (desktop) ──
@@ -823,6 +932,9 @@ func runApp() {
 			ui.SetChromeTitleBarDragging(titleBar.IsDragging() || titleBar.IsTitleClickPending())
 			ui.SetChromeWindowMoving(titleBar.IsDragging() || titleBar.IsTitleClickPending() || titleBar.IsResizing() || ui.FillClientChromeResizing())
 			ui.SetWheelSuppressBandY(ui.TitleBarHeight)
+			if applyInFrameClientResize(doc, titleBar, borderless, &resizeHold, frameStart) {
+				frameResized = true
+			}
 		} else {
 			ui.SetChromeWindowMoving(false)
 			ui.SetWheelSuppressBandY(0)
@@ -906,6 +1018,14 @@ func runApp() {
 			ui.PointerClickConsume(navDirectoryButtonRect(windowW, windowH)) {
 			if examples.NavigateToScene(examples.DirectorySceneTitle) {
 				frameWake.Add(ui.WakeScene, "directory")
+			}
+		}
+		if bottomChrome > 0 && !examples.PublicDemoMode() && !ui.OverlayBlocksSceneInput() {
+			if label, err := examples.TryLaunchSampleHostClick(windowW, windowH); label != "" {
+				frameWake.Add(ui.WakeInput, "sample-host")
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "sample host %s: %v\n", label, err)
+				}
 			}
 		}
 		if bottomChrome > 0 && examples.PublicDemoMode() && !ui.OverlayBlocksSceneInput() &&
@@ -999,6 +1119,12 @@ func runApp() {
 
 		// WebView HWND bounds follow layout (after Layout, before focus routing).
 		ui.DrainFillClientChromeResize()
+		if applyInFrameClientResize(doc, titleBar, borderless, &resizeHold, frameStart) {
+			frameResized = true
+			if doc.Root.IsDirty() || ui.SubtreeLayoutDirty(doc.Root) {
+				doc.Root.Layout()
+			}
+		}
 		ui.SyncWebViewHosts(doc)
 		focusInputBlock := resizeInputBlock
 		if titleBarBlocks {
@@ -1028,6 +1154,24 @@ func runApp() {
 		// ── Draw ──────────────────────────────────────────────────────────────
 		t2 := time.Now()
 		fullRedraw := false
+		// RT / client mismatch: defer recreate while dragging; never stretch.
+		// Present skips the SSAA pass and direct-draws until settle flush.
+		// (Do not call ApplyDisplayAwareSupersampling mid-drag — see syncWindowFromDisplay.)
+		if ui.PresentSizeMismatch(windowW, windowH) {
+			// KeepActiveFPS covers post-burst cooldown — Active() alone drops early and
+			// Force-recreated RTs every frame between slow WM_SIZE steps (resize lag).
+			resizingNow := frameResized || resizeHold.KeepActiveFPS(frameStart) || titleBar.IsResizing()
+			if resizingNow {
+				ui.DeferWindowTextures(windowW, windowH)
+			} else {
+				ui.FlushPendingWindowTextures()
+				if ui.PresentSizeMismatch(windowW, windowH) {
+					ui.ResizeWindowTextures(windowW, windowH)
+				}
+			}
+			doc.InvalidatePaint()
+			frameResized = true
+		}
 		resizePaintHold := frameResized || ui.WebViewLayoutJumpActive(frameStart) ||
 			resizeHold.Active(frameStart) || titleBar.IsResizing()
 		if resizePaintHold {
@@ -1038,55 +1182,61 @@ func runApp() {
 		}
 
 		if !windowFocused && doc != nil && doc.Root != nil && !doc.Root.IsDirty() &&
-			!(resizeHold.Active(frameStart) || titleBar.IsResizing()) {
+			!(resizeHold.Active(frameStart) || titleBar.IsResizing()) &&
+			!ui.SuperTargetNeedsFill() {
+			ui.ClearDrawDirtySubtree(doc.Root)
+		}
+
+		drawSuperPass := func() {
+			fullRedraw = true
+			ui.BeginSuperFrame(bgColor, borderless, windowW, windowH)
+
+			doc.Root.Draw()
+
+			if bottomChrome > 0 {
+				drawLauncherChrome(windowW, windowH, navBg, &studioPanel, studioState)
+			}
+
+			if perfOverlayVisible() {
+				drawPerfOverlay(windowW, windowH)
+			}
+
+			if borderless {
+				titleBar.Draw()
+			}
+
+			ui.EndSuperFrame()
+			ui.RecordCacheMiss()
 			ui.ClearDrawDirtySubtree(doc.Root)
 		}
 
 		if ui.SupersamplingActive() {
-			// ── 2× supersampled pass (skip when cache is valid) ───────────────
-			if doc.NeedsRedraw() && ui.SuperTargetDrawable() {
-				fullRedraw = true
-				ui.BeginSuperFrame(bgColor, borderless, windowW, windowH)
-
-				doc.Root.Draw()
-
-				if bottomChrome > 0 {
-					drawLauncherChrome(windowW, windowH, navBg, &studioPanel, studioState)
-				}
-
-				// Perf overlay (F11) — inside super pass for AA
-				if perfOverlayVisible() {
-					drawPerfOverlay(windowW, windowH)
-				}
-
-				// Title bar drawn on top of everything inside the super pass.
-				if borderless {
-					titleBar.Draw()
-				}
-
-				ui.EndSuperFrame()
-				ui.RecordCacheMiss()
-				// Bubbled drawDirty on transparent wrappers (editor-area, split) may
-				// outlive child Draw(); match cache-hit handling so idle can reach 10 FPS.
-				ui.ClearDrawDirtySubtree(doc.Root)
-			} else if doc.NeedsRedraw() {
-				// GL/window not ready for off-screen pass this frame — retry next frame.
+			sizeMismatch := ui.PresentSizeMismatch(windowW, windowH)
+			// Mid-drag (or any RT/client mismatch): skip the SSAA pass entirely.
+			// Drawing into a stale RT then direct-drawing again was double work and
+			// the real reason throttle still felt broken (ARCHIVE resize contract:
+			// layout every frame, never stretch; present direct until settle flush).
+			needSuper := !sizeMismatch && (doc.NeedsRedraw() || ui.SuperTargetNeedsFill())
+			if needSuper && ui.SuperTargetDrawable() {
+				drawSuperPass()
+			} else if needSuper {
 				doc.Root.MarkDrawDirty()
 				ui.RecordCacheMiss()
-			} else {
+			} else if !sizeMismatch {
 				ui.RecordCacheHit()
 				if doc.Root != nil {
 					ui.ClearDrawDirtySubtree(doc.Root)
 				}
 			}
 
-			// ── Blit 2× → 1× with GPU bilinear downscale ─────────────────────
+			// Present: blit only when dest == RT logical size and RT is filled.
 			rl.BeginDrawing()
 			ui.BeginDrawingBorderless(bgColor, borderless, windowW, windowH)
-			if ui.SuperTargetDrawable() {
+			canBlit := !sizeMismatch && ui.SuperTargetDrawable() && !ui.SuperTargetNeedsFill()
+			if canBlit {
 				ui.BlitToScreenBorderless(windowW, windowH, borderless)
-			} else if doc.NeedsRedraw() {
-				// SSAA RT not ready yet (early frames / GL init) — draw once to avoid a black flash.
+			} else {
+				// Mismatch / RT not ready — one direct tree draw (live client size).
 				doc.Root.Draw()
 				if bottomChrome > 0 {
 					drawLauncherChrome(windowW, windowH, navBg, &studioPanel, studioState)
@@ -1095,10 +1245,12 @@ func runApp() {
 					titleBar.Draw()
 				}
 				ui.ClearDrawDirtySubtree(doc.Root)
+				ui.RecordCacheMiss()
+				fullRedraw = true
 			}
 			// Cache-hit frames skip titleBar.Draw inside the RT — repaint hover chrome here.
 			if borderless && !fullRedraw && titleBar.ChromeNeedsPostBlit() {
-				titleBar.Draw()
+				titleBar.DrawCaptionHoverPlates()
 			}
 			ui.DrawAnimationOverlays(doc.Root, navRect)
 			drawPostChromeOverlays(windowW, windowH, doc.Root, bottomChrome, &studioPanel, studioState, inspector, navBg, navHint, navTextColor)
@@ -1124,6 +1276,14 @@ func runApp() {
 				windowShown = true
 				appicon.ReapplyWindowIcon()
 				idlePolicy.NoteSceneLoad(time.Now())
+				// Hidden→shown can settle client size; catch rem/layout before next paint.
+				prevShowW, prevShowH := windowW, windowH
+				prevShowRem := ui.RootFontSize
+				syncWindowFromDisplay(doc, titleBar, borderless)
+				if windowW != prevShowW || windowH != prevShowH || ui.RootFontSize != prevShowRem {
+					doc.ForceFullLayout()
+					doc.InvalidatePaint()
+				}
 			}
 
 		} else {
@@ -1137,6 +1297,7 @@ func runApp() {
 				if uiRT.ID != 0 {
 					fullRedraw = true
 					// Render into the 1× cache texture
+					ui.SetFTLCDLightBackdrop(bgColor)
 					rl.BeginTextureMode(uiRT)
 					if borderless {
 						rl.ClearBackground(rl.Blank)
@@ -1189,7 +1350,7 @@ func runApp() {
 				ui.RecordCacheHit()
 			}
 			if borderless && !fullRedraw && titleBar.ChromeNeedsPostBlit() {
-				titleBar.Draw()
+				titleBar.DrawCaptionHoverPlates()
 			}
 
 			ui.DrawAnimationOverlays(doc.Root, navRect)
@@ -1216,6 +1377,13 @@ func runApp() {
 				windowShown = true
 				appicon.ReapplyWindowIcon()
 				idlePolicy.NoteSceneLoad(time.Now())
+				prevShowW, prevShowH := windowW, windowH
+				prevShowRem := ui.RootFontSize
+				syncWindowFromDisplay(doc, titleBar, borderless)
+				if windowW != prevShowW || windowH != prevShowH || ui.RootFontSize != prevShowRem {
+					doc.ForceFullLayout()
+					doc.InvalidatePaint()
+				}
 			}
 		}
 
@@ -1265,6 +1433,14 @@ func runApp() {
 		if resizeHoldWasActive && !resizeBurstHold && doc != nil && doc.Root != nil && !doc.Root.IsDirty() {
 			ui.ClearDrawDirtySubtree(doc.Root)
 		}
+		// Settle: apply any deferred GPU RT size so the next frames blit 1:1 again.
+		if resizeHoldWasActive && !resizeBurstHold {
+			ui.FlushPendingWindowTextures()
+			if ui.PresentSizeMismatch(windowW, windowH) {
+				ui.ResizeWindowTextures(windowW, windowH)
+			}
+			doc.InvalidatePaint()
+		}
 		resizeHoldWasActive = resizeBurstHold
 		cleanForIdle := cacheHitThisFrame && !doc.NeedsRedraw() && !resizeBurstHold && queueDrained == 0
 		var idleBlockers ui.WakeReason
@@ -1277,8 +1453,8 @@ func runApp() {
 		idleBlockers |= ui.OverlayIdleBlockers()
 		idleWake := ui.WakeSummaryForIdlePolicy(endWake)
 		prevTargetFPS := lastTargetFPS
-		targetFPS := idlePolicy.Update(frameEnd, idleWake, cleanForIdle, idleBlockers, resizeBurstHold)
-		if !windowFocused && !resizeBurstHold && idleBlockers == 0 &&
+		targetFPS := idlePolicy.Update(frameEnd, idleWake, cleanForIdle, idleBlockers, resizeHoldActive)
+		if !windowFocused && !resizeHoldActive && idleBlockers == 0 &&
 			!ui.WebViewHostsActive() &&
 			doc != nil && doc.Root != nil && !doc.Root.IsDirty() {
 			targetFPS = ui.DeepIdleFPS
@@ -1305,7 +1481,7 @@ func runApp() {
 		ui.UpdateWebViewPresentBudget(targetFPS)
 		// One-shot SSAA redraw after async data only — do not drop FPS after user
 		// clicks, scene navigation, or other interactive redraws.
-		if windowFocused && targetFPS == ui.ActiveFPS && !resizeBurstHold &&
+		if windowFocused && targetFPS == ui.ActiveFPS && !resizeHoldActive &&
 			idleWake.Reasons == 0 && fullRedraw && doc != nil && doc.Root != nil &&
 			!doc.NeedsRedraw() && !doc.Root.IsDirty() && queueDrained == 0 &&
 			idlePolicy.LastReason() == ui.WakeDataUpdate {
@@ -1314,6 +1490,7 @@ func runApp() {
 		if windowFocused && ui.PointerClickPending() && targetFPS < ui.ActiveFPS {
 			targetFPS = ui.ActiveFPS
 		}
+		targetFPS = ui.ClampTargetFPSForResizeHold(targetFPS, resizeHoldActive)
 		policyChanged := targetFPS != lastTargetFPS
 		if policyChanged {
 			rl.SetTargetFPS(int32(targetFPS))
@@ -1557,4 +1734,3 @@ func sampleInputWake(prevMouse *rl.Vector2, windowFocused bool) ui.WakeSummary {
 	}
 	return out
 }
-

@@ -301,13 +301,8 @@ func (sh *SurfaceShell) Draw() {
 	profile.DrawShadow(chromeCtx)
 
 	fillBounds := bounds
-	bw := style.BorderWidth
-	// Fractional borders (e.g. panel 1.5) fringe under SSAA; snap to whole pixels.
+	bw := snapChromeBorderWidth(style.BorderWidth)
 	if bw > 0 {
-		bw = float32(int32(bw + 0.5))
-		if bw < 1 {
-			bw = 1
-		}
 		fillBounds = chromeFillBounds(bounds, bw)
 	}
 	fillRoundness := chromeRoundness(fillBounds, style.CornerRadius)
@@ -325,6 +320,9 @@ func (sh *SurfaceShell) Draw() {
 		rl.DrawRectangleRec(fillBounds, style.BackgroundColor)
 	}
 
+	popLCD := PushLCDSurfaceBackdrop(style.BackgroundColor)
+	defer PopLCDSurfaceBackdrop(popLCD)
+
 	if !deferGlassTitle {
 		header.Draw(bounds, fillBounds, style, style.CornerRadius)
 	}
@@ -335,11 +333,7 @@ func (sh *SurfaceShell) Draw() {
 	if bw > 0 && collapsedOnly {
 		borderBounds := chromeBorderBounds(bounds, bw)
 		bodyR := chromeRoundness(borderBounds, style.CornerRadius)
-		if bodyR > 0 {
-			rl.DrawRectangleRoundedLinesEx(borderBounds, bodyR, 32, bw, style.BorderColor)
-		} else {
-			rl.DrawRectangleLinesEx(borderBounds, bw, style.BorderColor)
-		}
+		DrawRoundedTessInsetBorder(borderBounds, bodyR, bw, style.BorderColor, style.BackgroundColor)
 	}
 
 	profile.DrawPostBorder(chromeCtx)

@@ -57,7 +57,7 @@ Working directory (or packaged layout) must resolve `assets/fonts/` (Remix + UI 
 Authoritative template: godoc on `ui.NewDocument` / `ui/document.go`.
 
 1. `rl.InitWindow` (often borderless + `FlagWindowHidden` until first frame)  
-2. `ui.InitDisplayAwareAtlases` + `ui.InitSupersampling`  
+2. `ui.InitDisplayAwareAtlases` + `ui.InitSupersampling` — **1× framebuffer by default**; optional `GRU_SSAA` / `GRU_RENDER_QUALITY` for testing (see [architecture/rendering.md](architecture/rendering.md))  
 3. `doc := ui.NewDocument(w, h)` → build children under `doc.Root`  
 4. Each frame: `DrainQueue` → `Update` → `Layout` if dirty → `BeginSuperFrame` / `Draw` / `BlitToScreen*`  
 

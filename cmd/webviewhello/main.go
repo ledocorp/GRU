@@ -70,7 +70,7 @@ func main() {
 	titleBar.HandleResize = true
 	titleBar.SetSize(windowW, windowH)
 
-	bg := rl.NewColor(228, 229, 235, 255)
+	bg := ui.WindowChromeFill()
 	borderless := true
 	windowShown := false
 	wasMaximized := false
@@ -85,6 +85,7 @@ func main() {
 		ui.SetActiveDocument(doc)
 		dt := rl.GetFrameTime()
 		doc.DrainQueue()
+		bg = ui.WindowChromeFill()
 
 		nw, nh := int32(rl.GetScreenWidth()), int32(rl.GetScreenHeight())
 		if nw < 1 {
@@ -107,6 +108,10 @@ func main() {
 
 		// §13.6 — same order as Studio main.go (do not reorder).
 		titleBar.Update(windowW, windowH)
+		if w, h, ok := ui.SyncBorderlessClientIfChanged(doc, titleBar, windowW, windowH); ok {
+			windowW, windowH = w, h
+			ui.MarkWebViewHostsResize()
+		}
 		ui.SetChromeTitleBarDragging(titleBar.IsDragging() || titleBar.IsTitleClickPending())
 		ui.SetChromeWindowMoving(titleBar.IsDragging() || titleBar.IsTitleClickPending() || titleBar.IsResizing() || ui.FillClientChromeResizing())
 		ui.SetWheelSuppressBandY(ui.TitleBarHeight)
@@ -138,6 +143,13 @@ func main() {
 			doc.SetPlatformWindowHandle(uintptr(rl.GetWindowHandle()))
 		}
 		ui.DrainFillClientChromeResize()
+		if w, h, ok := ui.SyncBorderlessClientIfChanged(doc, titleBar, windowW, windowH); ok {
+			windowW, windowH = w, h
+			ui.MarkWebViewHostsResize()
+			if doc.Root.IsDirty() || ui.SubtreeLayoutDirty(doc.Root) {
+				doc.Root.Layout()
+			}
+		}
 		ui.SyncWebViewHosts(doc)
 		ui.UpdateWebViewPresentBudget(ui.ActiveFPS)
 
@@ -153,7 +165,7 @@ func main() {
 			ui.RouteScenePointerFocus(doc)
 		}
 
-		if doc.NeedsRedraw() && ui.SuperTargetDrawable() {
+		if (doc.NeedsRedraw() || ui.SuperTargetNeedsFill()) && ui.SuperTargetDrawable() {
 			ui.BeginSuperFrame(bg, borderless, windowW, windowH)
 			doc.Root.Draw()
 			titleBar.Draw()
@@ -171,6 +183,7 @@ func main() {
 		ui.Tooltips.Draw()
 		ui.Toasts.Draw()
 		rl.EndDrawing()
+		ui.SettleBorderlessClientTextures(titleBar)
 		ui.PresentWebViewHosts()
 		if !ui.OverlayBlocksSceneInput() && !resizeInputBlock {
 			ui.RouteScenePointerFocusAfterPresent(doc)

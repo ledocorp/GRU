@@ -156,7 +156,7 @@ func (s *Slider) drawInternal() {
 	trackH := float32(6)
 	trackY := tb.Y + (tb.Height-trackH)/2
 	trackRect := rl.NewRectangle(tb.X, trackY, tb.Width, trackH)
-	rl.DrawRectangleRounded(trackRect, 1.0, 6, rl.NewColor(220, 222, 230, 255))
+	DrawRoundedFill(trackRect, 1.0, rl.NewColor(220, 222, 230, 255))
 
 	// ── Filled section (indigo) up to the thumb ───────────────────────────────
 	value := s.Value.Get()
@@ -194,7 +194,7 @@ func (s *Slider) drawInternal() {
 		}
 		if fillRect.Width > 0 && fillRect.Height > 0 {
 			beginScissorMode(int32(fillRect.X), int32(fillRect.Y), int32(fillRect.Width), int32(fillRect.Height))
-			rl.DrawRectangleRounded(trackRect, 1.0, 6, fillColor)
+			DrawRoundedFill(trackRect, 1.0, fillColor)
 			rl.EndScissorMode()
 			restoreVP()
 		}
@@ -206,11 +206,6 @@ func (s *Slider) drawInternal() {
 	if s.dragging {
 		thumbSize = 20
 	}
-	thumbRect := rl.NewRectangle(
-		thumbX-thumbSize/2,
-		tb.Y+(tb.Height-thumbSize)/2,
-		thumbSize, thumbSize,
-	)
 
 	// Soft glow ring behind the thumb on hover / drag
 	if s.hovered || s.dragging {
@@ -220,15 +215,19 @@ func (s *Slider) drawInternal() {
 			tb.Y+(tb.Height-glowSize)/2,
 			glowSize, glowSize,
 		)
-		rl.DrawRectangleRounded(glowRect, 1.0, 8, rl.NewColor(79, 70, 229, 24))
+		DrawRoundedFill(glowRect, 1.0, rl.NewColor(79, 70, 229, 24))
 	}
 
 	thumbBorder := focusRingIndigo
 	if stateApplied && style.BorderColor.A != 0 {
 		thumbBorder = style.BorderColor
 	}
-	rl.DrawRectangleRounded(thumbRect, 1.0, 8, rl.NewColor(255, 255, 255, 255))
-	rl.DrawRectangleRoundedLinesEx(thumbRect, 1.0, 8, 2, thumbBorder)
+	// Circular thumb + coverage ring (LinesEx was the remaining jagged/soft edge).
+	tcx := thumbX
+	tcy := tb.Y + tb.Height/2
+	tr := thumbSize / 2
+	DrawCoverageCircle(tcx, tcy, tr, rl.NewColor(255, 255, 255, 255))
+	DrawCoverageRing(tcx, tcy, tr-2, tr, 0, 360, thumbBorder)
 
 	// ── Value label ───────────────────────────────────────────────────────────
 	if s.ShowValue {

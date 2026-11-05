@@ -32,16 +32,27 @@ type responsiveScene struct {
 	previewFrames      []*ui.Card
 	previewScrollLanes []*ui.Container // fixed simWidth; scroll when window narrower
 	previewScrollVps   []*ui.Viewport
+	previewPanels      []*ui.Panel // panels 2–4; slider relayout skips controls + page grid
+	previewHosts       []*ui.Container
 	innerGrid          *ui.Container
 	scenePanels        []*ui.Panel
 	pendingPreviewRelayout bool
 	previewRelayoutSkip    int
 	lastWindowBp           ui.Breakpoint
+	lastClientW            int32
+	lastClientH            int32
 }
 
 func (s *responsiveScene) Title() string { return "Responsive - Breakpoints - Grid" }
 
-func (s *responsiveScene) OnUpdate(_ *ui.Document, _ float32) {
+func (s *responsiveScene) OnUpdate(doc *ui.Document, _ float32) {
+	if doc != nil && (doc.Width != s.lastClientW || doc.Height != s.lastClientH) {
+		s.lastClientW = doc.Width
+		s.lastClientH = doc.Height
+		s.syncPreviewHostWidths(s.simWidth)
+		s.markPreviewSubtreeDirty()
+		s.markPreviewPanelsDirty()
+	}
 	if !s.pendingPreviewRelayout {
 		return
 	}
@@ -73,6 +84,10 @@ func (s *responsiveScene) trackPanel(p *ui.Panel) *ui.Panel {
 	return p
 }
 
+func (s *responsiveScene) trackPreviewPanel(p *ui.Panel) {
+	s.previewPanels = append(s.previewPanels, p)
+}
+
 func responsivePanel(s *responsiveScene, id, title string) *ui.Panel {
 	p := ui.NewPanel(id, title, 0, 0, 0, 0)
 	p.AutoHeight = true
@@ -92,9 +107,9 @@ func breakpointLabel(width float32) string {
 	return ui.CurrentBreakpoint(width).String()
 }
 
-func (s *responsiveScene) newPreviewChromeFrame(id string, w float32, caption string) *ui.Card {
-	chrome := ui.NewCard(id, "", 0, 0, 0, 0)
-	chrome.AutoHeight = true
+func (s *responsiveScene) newPreviewChromeFrame(id string, w float32, caption string, bandH float32) *ui.Card {
+	chrome := ui.NewCard(id, "", 0, 0, 0, bandH)
+	chrome.AutoHeight = false
 	chrome.FlexDirection = ui.FlexColumn
 	chrome.Gap = 8
 	chrome.ClipChildren = true
@@ -108,25 +123,34 @@ func (s *responsiveScene) newPreviewChromeFrame(id string, w float32, caption st
 
 // Preview stack: Card frame → Viewport (visible width) → Container lane (@ simWidth)
 // → inner layout. Horizontal scroll appears when the window is narrower than simWidth.
+//
+// Fixed previewBandHeight (Batch 8 splitSectionHeight pattern) avoids nested AutoHeight
+// measure during window edge-drag and preview-slider coalesce.
 
 const (
-	previewLanePad        float32 = 14
-	previewLaneBottomBand float32 = 12 // below grid / flex row so card bottom borders clear the viewport clip
+	previewBandHeight           float32 = 320
+	previewResponsiveBandHeight float32 = 360 // column stack needs taller band at simWidth < 600
+	previewHScrollHeight        float32 = 112 // 96px tile + scrollbar lane
+	previewFlexCardHeight       float32 = 96
+	previewLanePad              float32 = 14
+	previewLaneBottomBand       float32 = 12 // below grid / flex row so card bottom borders clear the viewport clip
 )
 
 // previewChromeScroll — lane stays simWidth px; scroll inside the frame when the window is narrower.
 // Returns the content host (add grid/flex children here); the lane adds bottom inset below the host.
-func (s *responsiveScene) previewChromeScroll(id string, w float32) (*ui.Card, *ui.Container) {
+func (s *responsiveScene) previewChromeScroll(id string, w float32, bandH float32) (*ui.Card, *ui.Container) {
 	chrome := s.newPreviewChromeFrame(id, w,
-		fmt.Sprintf("Preview layout width: %.0f px (scroll when window is narrower)", w))
+		fmt.Sprintf("Preview layout width: %.0f px (scroll when window is narrower)", w), bandH)
 
 	scroll := ui.NewHorizontalViewport(id+"-scroll", 0, 0, 0, 0)
-	scroll.AutoHeight = true
+	scroll.AutoHeight = false
+	scroll.SetFlexGrow(1)
 	scroll.Gap = 0
 	scroll.SetStyle("list-flush")
 
 	lane := ui.NewContainer(id+"-lane", 0, 0, w, 0)
-	lane.AutoHeight = true
+	lane.AutoHeight = false
+	lane.SetFlexGrow(1)
 	lane.FlexDirection = ui.FlexColumn
 	lane.PreferredWidth = w
 	lane.MinWidth = w
@@ -136,10 +160,13 @@ func (s *responsiveScene) previewChromeScroll(id string, w float32) (*ui.Card, *
 	lane.SetStyleOverrides(ui.Style{Padding: previewLanePad})
 
 	host := ui.NewContainer(id+"-host", 0, 0, 0, 0)
-	host.AutoHeight = true
+	host.AutoHeight = false
+	host.SetFlexGrow(1)
 	host.FlexDirection = ui.FlexColumn
 	host.ClipChildren = true
 	host.SetStyle("transparent")
+
+	s.previewHosts = append(s.previewHosts, host)
 
 	bottomInset := ui.NewLabel(id+"-bottom-inset", "", 0, 0, 0, previewLaneBottomBand)
 	bottomInset.SetStyle("transparent")
@@ -173,6 +200,16 @@ func (s *responsiveScene) markPreviewSubtreeDirty() {
 	}
 }
 
+func (s *responsiveScene) resetPreviewScrollX() {
+	for _, vp := range s.previewScrollVps {
+		if vp == nil || vp.ScrollX == 0 {
+			continue
+		}
+		vp.ScrollX = 0
+		vp.MarkDirty()
+	}
+}
+
 func (s *responsiveScene) updatePreviewLabels(w float32) {
 	s.simWidth = w
 	if s.widthText != nil {
@@ -197,7 +234,26 @@ func (s *responsiveScene) updatePreviewLabels(w float32) {
 	}
 }
 
+func (s *responsiveScene) syncPreviewHostWidths(w float32) {
+	innerW := w - 2*previewLanePad
+	for _, host := range s.previewHosts {
+		if host == nil {
+			continue
+		}
+		host.PreferredWidth = innerW
+		host.MinWidth = innerW
+		host.MaxWidth = innerW
+		b := host.Bounds()
+		if b.Width != innerW {
+			b.Width = innerW
+			host.SetBounds(b)
+		}
+		host.InvalidateLayoutPassCache()
+	}
+}
+
 func (s *responsiveScene) relayoutPreviewSubtree(w float32) {
+	s.resetPreviewScrollX()
 	for _, lane := range s.previewScrollLanes {
 		lane.PreferredWidth = w
 		lane.MinWidth = w
@@ -208,15 +264,10 @@ func (s *responsiveScene) relayoutPreviewSubtree(w float32) {
 			lane.SetBounds(b)
 		}
 	}
+	s.syncPreviewHostWidths(w)
+	// Preview lanes + preview panels only — never dirty pageGrid or Root on slider width.
 	s.markPreviewSubtreeDirty()
-	s.markScenePanelsDirty()
-	if s.pageGrid != nil {
-		s.pageGrid.InvalidateLayoutPassCache()
-		ui.MarkResizeLayoutDirtySubtree(s.pageGrid)
-	}
-	if s.doc != nil && s.doc.Root != nil {
-		ui.MarkResizeLayoutDirtySubtree(s.doc.Root)
-	}
+	s.markPreviewPanelsDirty()
 }
 
 func (s *responsiveScene) applyPreviewWidth(w float32) {
@@ -226,12 +277,30 @@ func (s *responsiveScene) applyPreviewWidth(w float32) {
 
 func (s *responsiveScene) onPreviewSliderChanged(w float32) {
 	s.updatePreviewLabels(w)
-	s.relayoutPreviewSubtree(w)
-	s.pendingPreviewRelayout = false
+	for _, lane := range s.previewScrollLanes {
+		lane.PreferredWidth = w
+		lane.MinWidth = w
+		lane.MaxWidth = w
+		b := lane.Bounds()
+		if b.Width != w {
+			b.Width = w
+			lane.SetBounds(b)
+		}
+	}
+	s.syncPreviewHostWidths(w)
+	s.pendingPreviewRelayout = true
+	s.previewRelayoutSkip = 0
 }
 
 func (s *responsiveScene) markScenePanelsDirty() {
 	for _, p := range s.scenePanels {
+		p.InvalidateLayoutPassCache()
+		p.MarkDirty()
+	}
+}
+
+func (s *responsiveScene) markPreviewPanelsDirty() {
+	for _, p := range s.previewPanels {
 		p.InvalidateLayoutPassCache()
 		p.MarkDirty()
 	}
@@ -244,8 +313,12 @@ func (s *responsiveScene) Build(doc *ui.Document) {
 	s.previewFrames = s.previewFrames[:0]
 	s.previewScrollLanes = s.previewScrollLanes[:0]
 	s.previewScrollVps = s.previewScrollVps[:0]
+	s.previewPanels = s.previewPanels[:0]
+	s.previewHosts = s.previewHosts[:0]
 	s.scenePanels = s.scenePanels[:0]
 	s.innerGrid = nil
+	s.lastClientW = doc.Width
+	s.lastClientH = doc.Height
 
 	page := MountAppPage(doc, "resp",
 		"Responsive Layout",
@@ -341,14 +414,12 @@ func (s *responsiveScene) buildControlsPanel(doc *ui.Document) *ui.Panel {
 			return
 		}
 		s.lastWindowBp = bp
+		s.resetPreviewScrollX()
 		if s.pageGrid != nil {
 			s.pageGrid.InvalidateLayoutPassCache()
 			s.pageGrid.MarkDirty()
 		}
 		s.markScenePanelsDirty()
-		if s.doc != nil && s.doc.Root != nil {
-			s.doc.Root.MarkDirty()
-		}
 	})
 	slider.Value.Subscribe(func() {
 		s.onPreviewSliderChanged(slider.Value.Get())
@@ -359,11 +430,12 @@ func (s *responsiveScene) buildControlsPanel(doc *ui.Document) *ui.Panel {
 
 func (s *responsiveScene) buildGridPanel() *ui.Panel {
 	p := responsivePanel(s, "resp-grid-panel", "2 · 12-Column Grid (ColSpan)")
+	s.trackPreviewPanel(p)
 	setSpans5ResponsivePanel(p, 12, 12, 12, 12, 12)
 	p.AddChild(responsiveHint("resp-grid-hint",
 		"ColSpan tiers xs12/sm6/md4/lg3. Slider = layout width inside the lane; resize the window narrower to scroll inside the preview card (panel 5 shows scroll-only tiles)."))
 
-	chrome, host := s.previewChromeScroll("resp-grid-chrome", s.simWidth)
+	chrome, host := s.previewChromeScroll("resp-grid-chrome", s.simWidth, previewBandHeight)
 	inner := ui.NewContainer("resp-card-grid", 0, 0, 0, 0)
 	inner.LayoutType = ui.LayoutGrid
 	inner.GridColumns = 12
@@ -391,22 +463,26 @@ func (s *responsiveScene) buildGridPanel() *ui.Panel {
 
 func (s *responsiveScene) buildFlexGrowPanel() *ui.Panel {
 	p := responsivePanel(s, "resp-flexgrow-panel", "3 · Flex Row + FlexGrow Cards")
+	s.trackPreviewPanel(p)
 	setSpans5ResponsivePanel(p, 12, 12, 12, 6, 6)
 	p.AddChild(responsiveHint("resp-flexgrow-hint",
 		"Explicit FlexRow (not LayoutResponsive). Each card has FlexGrow=1 and shares the slider layout width; resize the window narrower to scroll inside the preview card."))
 
-	chrome, host := s.previewChromeScroll("resp-flexgrow-chrome", s.simWidth)
+	chrome, host := s.previewChromeScroll("resp-flexgrow-chrome", s.simWidth, previewBandHeight)
 	host.FlexDirection = ui.FlexRow
 	host.Gap = 10
+	host.SetFlexGrow(0)
+	hostB := host.Bounds()
+	hostB.Height = previewFlexCardHeight
+	host.SetBounds(hostB)
 
 	for i, title := range []string{"Alpha", "Beta", "Gamma"} {
-		// AutoHeight — fixed 88px clipped form-value + card padding (16×2).
-		card := ui.NewCard(fmt.Sprintf("resp-flexgrow-card-%d", i), "", 0, 0, 0, 0)
-		card.AutoHeight = true
+		card := ui.NewCard(fmt.Sprintf("resp-flexgrow-card-%d", i), "", 0, 0, 0, previewFlexCardHeight)
+		card.AutoHeight = false
 		card.SetFlexGrow(1)
 		card.FlexDirection = ui.FlexColumn
 		card.Gap = 6
-		card.ClipChildren = true
+		card.ClipChildren = false
 		tl := FlexCopy(fmt.Sprintf("resp-flexgrow-title-%d", i), "form-value", title)
 		sub := FlexCopy(fmt.Sprintf("resp-flexgrow-sub-%d", i), "form-label", "FlexGrow 1")
 		card.AddChild(tl)
@@ -419,25 +495,31 @@ func (s *responsiveScene) buildFlexGrowPanel() *ui.Panel {
 
 func (s *responsiveScene) buildResponsiveFlexPanel() *ui.Panel {
 	p := responsivePanel(s, "resp-responsive-panel", "4 · LayoutResponsive (≥600 row)")
+	s.trackPreviewPanel(p)
 	setSpans5ResponsivePanel(p, 12, 12, 12, 6, 6)
 	p.AddChild(responsiveHint("resp-responsive-hint",
 		"LayoutResponsive switches row/column at 600 px on the slider layout width. Resize the window narrower to scroll inside the preview card."))
 
-	chrome, host := s.previewChromeScroll("resp-responsive-chrome", s.simWidth)
+	chrome, host := s.previewChromeScroll("resp-responsive-chrome", s.simWidth, previewResponsiveBandHeight)
+	host.SetFlexGrow(0)
+	hostB := host.Bounds()
+	hostB.Height = previewFlexCardHeight*3 + 8*2 // column stack at simWidth < 600
+	host.SetBounds(hostB)
 	resp := ui.NewContainer("resp-responsive-inner", 0, 0, 0, 0)
-	resp.AutoHeight = true
+	resp.AutoHeight = false
+	resp.SetFlexGrow(1)
 	resp.LayoutType = ui.LayoutResponsive
-	resp.Gap = 10
-	resp.ClipChildren = true
+	resp.Gap = 8
+	resp.ClipChildren = false
 	resp.SetStyle("transparent")
 
 	for i, title := range []string{"North", "South", "East"} {
-		card := ui.NewCard(fmt.Sprintf("resp-responsive-card-%d", i), "", 0, 0, 0, 0)
-		card.AutoHeight = true
+		card := ui.NewCard(fmt.Sprintf("resp-responsive-card-%d", i), "", 0, 0, 0, previewFlexCardHeight)
+		card.AutoHeight = false
 		card.SetFlexGrow(1)
 		card.FlexDirection = ui.FlexColumn
 		card.Gap = 4
-		card.ClipChildren = true
+		card.ClipChildren = false
 		card.AddChild(FlexCopy(fmt.Sprintf("resp-responsive-title-%d", i), "form-value", title))
 		card.AddChild(FlexCopy(fmt.Sprintf("resp-responsive-sub-%d", i), "form-label", "LayoutResponsive"))
 		resp.AddChild(card)
@@ -453,8 +535,8 @@ func (s *responsiveScene) buildHorizontalScrollPanel() *ui.Panel {
 	p.AddChild(responsiveHint("resp-scroll-hint",
 		"Uses the full panel body width (follows window/page grid). Wheel over the strip or drag the bottom scrollbar; cards keep fixed width."))
 
-	hv := ui.NewHorizontalViewport("resp-hscroll", 0, 0, 0, 0)
-	hv.AutoHeight = true
+	hv := ui.NewHorizontalViewport("resp-hscroll", 0, 0, 0, previewHScrollHeight)
+	hv.AutoHeight = false
 	hv.Gap = 8
 	hv.SetStyle("list-flush")
 	for i := 0; i < 8; i++ {
@@ -465,8 +547,8 @@ func (s *responsiveScene) buildHorizontalScrollPanel() *ui.Panel {
 }
 
 func (s *responsiveScene) makeMetricCard(id, title, note string) *ui.Card {
-	c := ui.NewCard(id, "", 0, 0, 0, 0)
-	c.AutoHeight = true
+	c := ui.NewCard(id, "", 0, 0, 0, 72)
+	c.AutoHeight = false
 	c.FlexDirection = ui.FlexColumn
 	c.Gap = 4
 	c.ClipChildren = true

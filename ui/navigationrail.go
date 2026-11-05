@@ -7,7 +7,7 @@ import rl "github.com/gen2brain/raylib-go/raylib"
 const (
 	navigationRailWidth    float32 = 80
 	navigationRailItemH    float32 = 72
-	navigationRailIconSize float32 = 24
+	navigationRailIconSize float32 = 26
 	navigationRailIconTop  float32 = 12
 	navigationRailLabelGap float32 = 4
 	navigationRailActiveW  float32 = 3
@@ -173,8 +173,8 @@ func (nr *NavigationRail) drawInternal() {
 		))
 		if item.Phosphor != "" {
 			wt := item.PhosphorWeight
-			if wt == "" {
-				wt = PhosphorRegular
+			if wt == "" || (PreferIconSharp1x() && (wt == PhosphorRegular || wt == "")) {
+				wt = PhosphorFill
 			}
 			Phosphor.EnsureLoaded(item.Phosphor, wt)
 			if !Phosphor.Draw(iconDst, item.Phosphor, wt, iconColor) && item.Icon != "" {

@@ -85,8 +85,8 @@ type Theme map[string]Style
 //
 // Typography scale (all rendering goes through drawTextS → SDF / DefaultFont):
 //   - Theme FontSize tokens are rem-like units on a 16 px grid ([TypeScaleReference]).
-//   - At runtime, EffectiveFontSize = token × (RootFontSize / 16). At 640 px width,
-//     RootFontSize is 22 px ([TypeScaleMinRoot]), so default (18) ≈ 25 px on screen.
+//   - At runtime, EffectiveFontSize = token × (RootFontSize / 16). Typical desktop
+//     RootFontSize is [TypeScaleMinRoot] (18), so default token 18 → ~20 px on screen.
 //   - Body & fields: "default", "input", "dropdown", "datepicker" — 18 pt token
 //   - Captions & hints: "form-label" (15 pt); "form-value" (18 pt) for readouts
 //   - Preset/card body: "surface-body" — 18 pt (synced from tinted chrome)
@@ -274,7 +274,7 @@ var CurrentTheme = Theme{
 		Padding:         16,
 		BorderWidth:     1.5,
 		BorderColor:     rl.NewColor(210, 210, 215, 255),
-		CornerRadius:    8,
+		CornerRadius:    10,
 	},
 	// Standard button: slate blue-grey, white text, rounded corners
 	"button": {
@@ -282,6 +282,7 @@ var CurrentTheme = Theme{
 		TextColor:       rl.NewColor(255, 255, 255, 255),
 		FontSize:        17,
 		Bold:            true,
+		NoCaptionBold:   true,
 		Padding:         8,
 		BorderWidth:     0,
 		CornerRadius:    6,
@@ -333,13 +334,14 @@ var CurrentTheme = Theme{
 		TextColor:       rl.NewColor(28, 28, 38, 255),
 		FontSize:        28,
 		Bold:            true,
-		Padding:         16,
+		Padding:         20, // was 16 — ClearType caps need room (Glyph Quality title clip)
 	},
 	// Header subtitle: muted secondary text beneath the title
 	"header-subtitle": {
-		TextColor:   rl.NewColor(100, 102, 120, 255),
+		TextColor:   rl.NewColor(58, 62, 82, 255), // was 72,76,96 — muted captions vs web Segoe
 		FontSize:    18,
-		FontDensity: 1.05,
+		FontDensity: 1.0,
+		MinFontSize: 18,
 	},
 	// Text input: white bg with blue focus ring (applied in drawInternal).
 	// TextInput defaults to this key in NewTextInput; padding drives horizontal inset.
@@ -437,7 +439,7 @@ var CurrentTheme = Theme{
 		TextColor:       rl.NewColor(30, 30, 30, 255),
 		FontSize:        18,
 		Padding:         10,
-		BorderWidth:     2,
+		BorderWidth:     1,
 		BorderColor:     rl.NewColor(190, 192, 200, 255),
 		CornerRadius:    6,
 	},
@@ -455,7 +457,7 @@ var CurrentTheme = Theme{
 		TextColor:       rl.NewColor(30, 30, 30, 255),
 		FontSize:        18,
 		Padding:         10,
-		BorderWidth:     2,
+		BorderWidth:     1,
 		BorderColor:     rl.NewColor(190, 192, 200, 255),
 		CornerRadius:    6,
 	},
@@ -599,13 +601,14 @@ var CurrentTheme = Theme{
 		NoCaptionBold:   true,
 		BorderWidth:     1,
 		BorderColor:     rl.NewColor(232, 234, 240, 255),
-		CornerRadius:    4,
+		CornerRadius:    6,
 		FontDensity:     1.0,
 	},
 	"list-tile-subtitle": {
-		TextColor:   rl.NewColor(100, 106, 128, 255),
+		TextColor:   rl.NewColor(58, 64, 86, 255), // was 72,78,100 — ClearType muted weight
 		FontSize:    16,
 		FontDensity: 1.0,
+		MinFontSize: 16,
 	},
 	// list-tile-pane — alias; same chrome as list-tile (docked list panes).
 	"list-tile-pane": {
@@ -615,7 +618,7 @@ var CurrentTheme = Theme{
 		NoCaptionBold:   true,
 		BorderWidth:     1,
 		BorderColor:     rl.NewColor(232, 234, 240, 255),
-		CornerRadius:    4,
+		CornerRadius:    6,
 		FontDensity:     1.0,
 	},
 	// list-tile-bordered — alias; same chrome as list-tile (settings panel rows).
@@ -626,7 +629,7 @@ var CurrentTheme = Theme{
 		NoCaptionBold:   true,
 		BorderWidth:     1,
 		BorderColor:     rl.NewColor(232, 234, 240, 255),
-		CornerRadius:    4,
+		CornerRadius:    6,
 		FontDensity:     1.0,
 	},
 	// spinbox — numeric stepper chrome (spinbox.go).
@@ -643,6 +646,8 @@ var CurrentTheme = Theme{
 		BackgroundColor: rl.NewColor(235, 237, 245, 255),
 		TextColor:       rl.NewColor(90, 94, 118, 255),
 		FontSize:        14,
+		MinFontSize:     TypeScaleMinSegmentedPx,
+		NoCaptionBold:   true,
 		BorderWidth:     1,
 		BorderColor:     rl.NewColor(220, 222, 234, 255),
 		CornerRadius:    8,
@@ -1044,20 +1049,22 @@ var CurrentTheme = Theme{
 	},
 
 	// form-label — right-aligned (or caption) text beside each control.
-	// Muted slate, 14 pt minimum, slightly dense.
+	// Muted slate; MinFontSize keeps S1 exact strikes (not soft Path A).
 	"form-label": {
 		BackgroundColor: rl.NewColor(0, 0, 0, 0),
-		TextColor:       rl.NewColor(90, 94, 120, 255),
+		TextColor:       rl.NewColor(58, 62, 84, 255), // was 68,72,96 — muted ClearType weight
 		FontSize:        15,
 		NoCaptionBold:   true,
+		MinFontSize:     16,
 	},
 
 	// toolbar-caption — compact checkbox / toggle label beside a control.
 	"toolbar-caption": {
 		BackgroundColor: rl.NewColor(0, 0, 0, 0),
-		TextColor:       rl.NewColor(90, 94, 120, 255),
+		TextColor:       rl.NewColor(68, 72, 96, 255),
 		FontSize:        15,
 		NoCaptionBold:   true,
+		MinFontSize:     16,
 	},
 
 	// form-field-caption — title above a generated form control (Name, Density, etc.).
@@ -1106,7 +1113,8 @@ var CurrentTheme = Theme{
 	"contextmenu": {
 		BackgroundColor: rl.NewColor(255, 255, 255, 255),
 		TextColor:       rl.NewColor(30, 32, 50, 255),
-		FontSize:        16,
+		FontSize:        17,
+		MinFontSize:     16,
 		Padding:         8,
 		BorderWidth:     1,
 		BorderColor:     rl.NewColor(210, 213, 228, 255),
@@ -1117,7 +1125,8 @@ var CurrentTheme = Theme{
 	"contextmenu-item": {
 		BackgroundColor: rl.NewColor(0, 0, 0, 0),
 		TextColor:       rl.NewColor(30, 32, 50, 255),
-		FontSize:        16,
+		FontSize:        17,
+		MinFontSize:     16,
 		Padding:         10,
 		BorderWidth:     0,
 	},
@@ -1126,7 +1135,7 @@ var CurrentTheme = Theme{
 	"contextmenu-shortcut": {
 		BackgroundColor: rl.NewColor(0, 0, 0, 0),
 		TextColor:       rl.NewColor(118, 122, 146, 255),
-		FontSize:        14,
+		FontSize:        15,
 		NoCaptionBold:   true,
 		Padding:         0,
 		BorderWidth:     0,
@@ -1136,7 +1145,8 @@ var CurrentTheme = Theme{
 	"contextmenu-hover": {
 		BackgroundColor: rl.NewColor(237, 238, 246, 255),
 		TextColor:       rl.NewColor(20, 22, 50, 255),
-		FontSize:        16,
+		FontSize:        17,
+		MinFontSize:     16,
 		Padding:         10,
 		BorderWidth:     0,
 	},
@@ -1181,7 +1191,8 @@ var CurrentTheme = Theme{
 	// All badge styles share the same geometry (pill shape, 24 px default height,
 	// 16 pt text).  Only background/text/border colors differ per variant.
 	// CornerRadius=100 is a sentinel that badge.drawInternal maps to roundness=1.0
-	// (full pill).  BorderWidth=0 means no outline is drawn.
+	// (full pill). Soft chips: BorderWidth=0 + coverage fill (Avatar family, C21). A forced 1px tess
+	// rim on 24px pills stair-steps; selected still adds indigo via badge.go.
 
 	// badge — neutral grey chip for generic labels or tags.
 	"badge": {
@@ -1425,8 +1436,9 @@ var CurrentTheme = Theme{
 		TextColor: rl.NewColor(120, 124, 142, 255),
 	},
 	"richtext-list-marker": {
-		TextColor: rl.NewColor(79, 70, 229, 255),
-		Bold:      true,
+		TextColor:   rl.NewColor(79, 70, 229, 255),
+		Bold:        true,
+		PreviewFont: true, // same Inter face as preview body (not Segoe)
 	},
 	"richtext-code": {
 		BackgroundColor: rl.NewColor(237, 233, 254, 255),
@@ -1863,14 +1875,28 @@ var CurrentTheme = Theme{
 		Padding:         8,
 		CornerRadius:    4,
 	},
-	// toolbar-menu — dropdown / find face (same readable size as toolbar-btn).
+	// toolbar-menu — Find field, ribbon menus, Settings dropdown face + popup.
+	// Typography matches list-tile titles ("Syntax theme") — same FontSize token,
+	// density, and ink. No Min/MaxFontSize so rem scaling stays identical.
 	"toolbar-menu": {
 		BackgroundColor: rl.NewColor(255, 255, 255, 255),
-		TextColor:       rl.NewColor(73, 80, 87, 255),
+		TextColor:       rl.NewColor(28, 32, 48, 255),
 		FontSize:        18,
-		MaxFontSize:     18,
+		NoCaptionBold:   true,
 		FontDensity:     1.0,
-		Padding:         6,
+		Padding:         8,
+		BorderWidth:     1,
+		BorderColor:     rl.NewColor(222, 226, 230, 255),
+		CornerRadius:    4,
+	},
+	// toolbar-menu-value — Settings selected-value faces (same type as toolbar-menu).
+	"toolbar-menu-value": {
+		BackgroundColor: rl.NewColor(255, 255, 255, 255),
+		TextColor:       rl.NewColor(28, 32, 48, 255),
+		FontSize:        18,
+		NoCaptionBold:   true,
+		FontDensity:     1.0,
+		Padding:         8,
 		BorderWidth:     1,
 		BorderColor:     rl.NewColor(222, 226, 230, 255),
 		CornerRadius:    4,

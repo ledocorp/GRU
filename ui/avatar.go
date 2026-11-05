@@ -103,7 +103,7 @@ func (a *Avatar) Draw() {
 		if fill.A == 0 {
 			fill = rl.NewColor(199, 210, 254, 255)
 		}
-		rl.DrawCircleV(rl.NewVector2(cx, cy), r, fill)
+		DrawCoverageCircle(cx, cy, r, fill)
 		text := a.Initials
 		if text == "" {
 			text = "?"
@@ -131,8 +131,8 @@ func (a *Avatar) Draw() {
 		if a.StatusOnline {
 			fill = rl.NewColor(34, 197, 94, 255)
 		}
-		rl.DrawCircleV(rl.NewVector2(dotX, dotY), dotR+1.5, ring)
-		rl.DrawCircleV(rl.NewVector2(dotX, dotY), dotR, fill)
+		DrawCoverageCircle(dotX, dotY, dotR+1.5, ring)
+		DrawCoverageCircle(dotX, dotY, dotR, fill)
 	}
 }
 

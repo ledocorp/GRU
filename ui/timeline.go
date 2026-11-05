@@ -132,8 +132,8 @@ func (t *Timeline) drawInternal() {
 			rl.DrawRectangle(int32(trackX-timelineLineW/2), int32(cy+timelineDotR),
 				int32(timelineLineW), int32(eh-timelineDotR*2+8), lineColor)
 		}
-		rl.DrawCircleV(rl.NewVector2(trackX, cy), timelineDotR+1.5, dotBorder)
-		rl.DrawCircleV(rl.NewVector2(trackX, cy), timelineDotR, accent)
+		DrawCoverageCircle(trackX, cy, timelineDotR+1.5, dotBorder)
+		DrawCoverageCircle(trackX, cy, timelineDotR, accent)
 
 		titleStyle := style
 		titleStyle.Bold = true

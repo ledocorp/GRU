@@ -137,15 +137,20 @@ func (c *Chart) drawInternal() {
 		if n == 1 {
 			x := plot.X + plot.Width/2
 			y := c.mapY(c.Series[0], plot)
-			rl.DrawCircleV(rl.NewVector2(x, y), 4, lineCol)
+			DrawCoverageCircle(x, y, 2.2, lineCol)
 			return
 		}
-		for i := 1; i < n; i++ {
-			x0 := plot.X + plot.Width*float32(i-1)/float32(n-1)
-			x1 := plot.X + plot.Width*float32(i)/float32(n-1)
-			y0 := c.mapY(c.Series[i-1], plot)
-			y1 := c.mapY(c.Series[i], plot)
-			rl.DrawLineEx(rl.NewVector2(x0, y0), rl.NewVector2(x1, y1), 2, lineCol)
+		pts := make([]rl.Vector2, n)
+		for i, v := range c.Series {
+			pts[i] = rl.NewVector2(
+				plot.X+plot.Width*float32(i)/float32(n-1),
+				c.mapY(v, plot),
+			)
 		}
+		// Keep capsules inside the grid; scissor trims AA fringe at the frame.
+		insetPolylineToPlot(pts, plot, 3)
+		beginScissorMode(int32(plot.X+1), int32(plot.Y+1), int32(plot.Width-2), int32(plot.Height-2))
+		drawCoveragePolyline(pts, 1.45, lineCol)
+		rl.EndScissorMode()
 	}
 }

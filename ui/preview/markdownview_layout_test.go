@@ -8,6 +8,25 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
+func TestMarkdownViewLayoutDoesNotSelfDirty(t *testing.T) {
+	mv := NewMarkdownView("mv-idle", 0, 0, 400, 600)
+	mv.SetBounds(rl.NewRectangle(0, 0, 400, 600))
+	mv.SetMarkdown("# Hello\n\nBody text that wraps in the preview lane.\n")
+	mv.EnsureFullyBuilt()
+	mv.RelayoutAfterContentChange()
+	// Settle frames should clear; follow-up Layout must not leave MarkdownView layout-dirty
+	// (MarkDirty on lane/scroll used to bubble after Container.Layout cleared the flag).
+	for i := 0; i < 6; i++ {
+		mv.Layout()
+	}
+	if mv.IsDirty() {
+		t.Fatal("MarkdownView still layout-dirty after settle — pins notepad-md-preview[layout]")
+	}
+	if mv.layoutSyncedGen != mv.buildGen {
+		t.Fatalf("layoutSyncedGen=%d buildGen=%d", mv.layoutSyncedGen, mv.buildGen)
+	}
+}
+
 func TestMarkdownViewFirstRealWidthRemeasures(t *testing.T) {
 	mv := NewMarkdownView("mv-w", 0, 0, 0, 0)
 	mv.SetMarkdown("# Hello\n\nA short paragraph that should wrap once width is known.\n")

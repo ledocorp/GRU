@@ -161,16 +161,15 @@ func (drp *DateRangePicker) drawInternal() {
 			}
 		}
 	}
+	bw := style.BorderWidth
+	if bw <= 0 {
+		bw = 1
+	}
 	if r > 0 {
-		rl.DrawRectangleRounded(bounds, r, 8, bg)
-		if style.BorderWidth > 0 {
-			rl.DrawRectangleRoundedLinesEx(bounds, r, 8, style.BorderWidth, borderCol)
-		}
+		DrawRoundedInsetBorder(bounds, r, bw, borderCol, bg)
 	} else {
 		rl.DrawRectangleRec(bounds, bg)
-		if style.BorderWidth > 0 {
-			rl.DrawRectangleLinesEx(bounds, style.BorderWidth, borderCol)
-		}
+		rl.DrawRectangleLinesEx(bounds, bw, borderCol)
 	}
 
 	label := drp.formatFieldLabel()
@@ -186,25 +185,22 @@ func (drp *DateRangePicker) drawInternal() {
 	}
 	drawTextS(truncateTextS(label, textMaxW, drawStyle), int32(bounds.X+fieldTextPad), TextPosY(bounds, style), drawStyle)
 
-	arrowR := float32(9)
-	arrowX := bounds.X + bounds.Width - 26
-	arrowY := bounds.Y + bounds.Height/2
-	arrowCol := rl.NewColor(110, 112, 128, 255)
-	if open {
-		rl.DrawTriangle(
-			rl.NewVector2(arrowX, arrowY+arrowR*0.5),
-			rl.NewVector2(arrowX+arrowR*2, arrowY+arrowR*0.5),
-			rl.NewVector2(arrowX+arrowR, arrowY-arrowR*0.5),
-			arrowCol,
-		)
-	} else {
-		rl.DrawTriangle(
-			rl.NewVector2(arrowX, arrowY-arrowR*0.5),
-			rl.NewVector2(arrowX+arrowR*2, arrowY-arrowR*0.5),
-			rl.NewVector2(arrowX+arrowR, arrowY+arrowR*0.5),
-			arrowCol,
-		)
+	iconSz := float32(18)
+	if iconSz > bounds.Height-8 {
+		iconSz = bounds.Height - 8
 	}
+	dst := snapPhosphorRect(rl.NewRectangle(
+		bounds.X+bounds.Width-fieldArrowGutter+4,
+		bounds.Y+(bounds.Height-iconSz)/2,
+		iconSz, iconSz,
+	))
+	arrowCol := rl.NewColor(110, 112, 128, 255)
+	name := PhosphorCaretDown
+	if open {
+		name = PhosphorCaretUp
+	}
+	Phosphor.EnsureLoaded(name, PhosphorFill)
+	Phosphor.Draw(dst, name, PhosphorFill, arrowCol)
 }
 
 func (drp *DateRangePicker) IsInteractive() bool { return true }
@@ -574,14 +570,27 @@ func (m *dateRangePickerManager) Draw() {
 		float32(int32(m.popW+0.5)),
 		float32(int32(m.popH+0.5)),
 	)
-	shadowRec := rl.NewRectangle(popRec.X+2, popRec.Y+4, popRec.Width, popRec.Height)
-	rl.DrawRectangleRounded(shadowRec, 0.06, 12, mul(rl.NewColor(0, 0, 20, 55)))
-	rl.DrawRectangleRounded(popRec, 0.06, 12, mul(rl.NewColor(252, 252, 255, 255)))
-	drawPopupRoundedBorder(popRec, 10, 1.5, mul(rl.NewColor(198, 200, 214, 255)))
+	shorter := popRec.Width
+	if popRec.Height < shorter {
+		shorter = popRec.Height
+	}
+	popRound := float32(0.06)
+	if shorter > 0 {
+		popRound = 10 / (shorter / 2)
+		if popRound > 1 {
+			popRound = 1
+		}
+	}
+	DrawRoundedFill(rl.NewRectangle(popRec.X+2, popRec.Y+4, popRec.Width, popRec.Height), popRound, mul(rl.NewColor(0, 0, 20, 55)))
+	DrawRoundedInsetBorder(popRec, popRound, 1.5, mul(rl.NewColor(198, 200, 214, 255)), mul(rl.NewColor(252, 252, 255, 255)))
 
 	title := fmt.Sprintf("%s %d", m.viewMonth.String(), m.viewYear)
-	tw := MeasureText(title, 17)
-	DrawText(title, m.popX+(m.popW-tw)/2, m.popY+dpPad+8, 17, mul(rl.NewColor(40, 42, 58, 255)))
+	titleSt := calendarTitleTextStyle()
+	titleSt.TextColor = calendarTextColor(titleSt.TextColor, m.fade)
+	tw := float32(measureTextS(title, titleSt))
+	tx := int32(m.popX + (m.popW-tw)/2 + 0.5)
+	titleRect := rl.NewRectangle(m.popX, m.popY+dpPad, m.popW, dpHeaderH)
+	drawTextS(title, tx, TextPosY(titleRect, titleSt), titleSt)
 
 	drawMiniNav(m.prevBtn, true, mul)
 	drawMiniNav(m.nextBtn, false, mul)
@@ -591,11 +600,14 @@ func (m *dateRangePickerManager) Draw() {
 	if cw <= 0 {
 		cw = dpCellW
 	}
+	dowSt := calendarDowTextStyle()
+	dowSt.TextColor = calendarTextColor(dowSt.TextColor, m.fade)
 	for c, d := range dows {
 		cx := m.gridOriginX + float32(c)*cw
 		cy := m.popY + dpPad + dpHeaderH
-		tw2 := MeasureText(d, 12)
-		DrawText(d, cx+(cw-tw2)/2, cy+4, 12, mul(rl.NewColor(120, 122, 140, 255)))
+		tw2 := float32(measureTextS(d, dowSt))
+		cell := rl.NewRectangle(cx, cy, cw, dpDowH)
+		drawTextS(d, int32(cx+(cw-tw2)/2+0.5), TextPosY(cell, dowSt), dowSt)
 	}
 
 	today := dateTruncLocal(time.Now())
@@ -637,7 +649,7 @@ func (m *dateRangePickerManager) Draw() {
 		}
 		if isEndpoint {
 			paint.Ring = rl.NewColor(79, 70, 229, 255)
-			paint.RingWidth = 2
+			paint.RingWidth = 1.75
 		} else if isFocus && !isHover {
 			paint.Ring = rl.NewColor(99, 90, 249, 255)
 			paint.RingWidth = 2
@@ -645,11 +657,11 @@ func (m *dateRangePickerManager) Draw() {
 		paintCalendarDay(cr, paint, mul)
 
 		ds := fmt.Sprintf("%d", cell.Date.Day())
-		dtw := MeasureText(ds, dpDayFontSize)
-		tc := mul(rl.NewColor(38, 40, 52, 255))
+		tc := calendarTextColor(rl.NewColor(38, 40, 52, 255), m.fade)
 		if isEndpoint || (isFocus && !isHover) {
-			tc = mul(rl.NewColor(55, 48, 163, 255))
+			tc = calendarTextColor(rl.NewColor(55, 48, 163, 255), m.fade)
 		}
-		DrawText(ds, cr.X+(cr.Width-dtw)/2, cr.Y+(dpCellH-float32(dpDayFontSize))/2, dpDayFontSize, tc)
+		center, _ := dayCellDisc(cr)
+		drawCalendarDayNumber(ds, center, tc)
 	}
 }

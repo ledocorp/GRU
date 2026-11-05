@@ -423,6 +423,8 @@ func (sb *SearchBar) drawInternal() {
 		borderCol = focusRingIndigo
 	}
 	drawRoundedInsetBorder(bounds, roundness, bw, borderCol, style.BackgroundColor)
+	popLCD := PushLCDSurfaceBackdrop(style.BackgroundColor)
+	defer PopLCDSurfaceBackdrop(popLCD)
 
 	// ── Search icon ───────────────────────────────────────────────────────────
 	if sb.ShowIcon {
@@ -450,8 +452,7 @@ func (sb *SearchBar) drawInternal() {
 	if sb.text == "" && sb.Placeholder != "" {
 		// Muted placeholder — 38% opacity of the text colour.
 		phStyle := style
-		tc := style.TextColor
-		phStyle.TextColor = rl.NewColor(tc.R, tc.G, tc.B, uint8(float32(tc.A)*0.38))
+		phStyle.TextColor = rl.NewColor(140, 144, 168, 255)
 		drawTextS(sb.Placeholder, posX, posY, phStyle)
 	} else if sb.text != "" {
 		drawTextS(sb.text, posX, posY, style)
@@ -461,7 +462,7 @@ func (sb *SearchBar) drawInternal() {
 	if sb.focused && int(sb.blinkTimer*2)%2 == 0 {
 		cxOff := measureTextS(sb.text[:sb.cursor], style)
 		cx := int32(textL) + 2 + cxOff - sb.scrollOffset
-		rl.DrawLine(cx, posY, cx, posY+int32(EffectiveFontSize(style)), focusRingIndigo)
+		drawStyledCaret(cx, posY, style, focusRingIndigo)
 	}
 
 	rl.EndScissorMode()

@@ -12,21 +12,37 @@ func collectFootnoteIndexToRef(doc ast.Node) map[int]string {
 		return out
 	}
 	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
-		if !entering {
-			return ast.WalkContinue, nil
-		}
-		fn, ok := n.(*extast.Footnote)
-		if !ok {
-			return ast.WalkContinue, nil
-		}
-		ref := string(fn.Ref)
-		if ref == "" {
-			return ast.WalkContinue, nil
-		}
-		out[fn.Index] = ref
+		collectFootnoteIndexNode(n, entering, out)
 		return ast.WalkContinue, nil
 	})
 	return out
+}
+
+// collectFootnoteIndexFromBlocks walks parsed top-level blocks only (avoids a second full parse).
+func collectFootnoteIndexFromBlocks(blocks []ast.Node) map[int]string {
+	out := make(map[int]string)
+	for _, b := range blocks {
+		_ = ast.Walk(b, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+			collectFootnoteIndexNode(n, entering, out)
+			return ast.WalkContinue, nil
+		})
+	}
+	return out
+}
+
+func collectFootnoteIndexNode(n ast.Node, entering bool, out map[int]string) {
+	if !entering {
+		return
+	}
+	fn, ok := n.(*extast.Footnote)
+	if !ok {
+		return
+	}
+	ref := string(fn.Ref)
+	if ref == "" {
+		return
+	}
+	out[fn.Index] = ref
 }
 
 // reorderFootnotesLast moves FootnoteList blocks to the document tail so preview

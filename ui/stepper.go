@@ -4,7 +4,6 @@ package ui
 
 import (
 	"fmt"
-	"math"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -138,7 +137,7 @@ func NewStepper(id string, steps []StepItem, x, y, w, h float32) *Stepper {
 		Direction:    StepperHorizontal,
 		Clickable:    false,
 		CircleRadius: 18,
-		LineThick:    2.5,
+		LineThick:    1,
 		animProgress: 0,
 		hoverStep:    -1,
 	}
@@ -284,27 +283,37 @@ func (st *Stepper) drawInternal() {
 
 		if st.Direction == StepperHorizontal {
 			lineX := c1.X + r + 3
-			lineY := c1.Y - st.LineThick/2
+			lineY := float32(int32(c1.Y))
 			lineW := c2.X - r - 3 - lineX
 			if lineW < 1 {
 				lineW = 1
 			}
-			// Background (empty) segment.
-			rl.DrawRectangleRec(rl.NewRectangle(lineX, lineY, lineW, st.LineThick), stepLineEmpty)
-			// Filled (completed) portion.
+			th := st.LineThick
+			if PreferGeometryCoverageAA() {
+				th = 1
+				lineY = float32(int32(c1.Y))
+			} else {
+				lineY = c1.Y - th/2
+			}
+			rl.DrawRectangleRec(rl.NewRectangle(lineX, lineY, lineW, th), stepLineEmpty)
 			if fillFrac > 0 {
-				rl.DrawRectangleRec(rl.NewRectangle(lineX, lineY, lineW*fillFrac, st.LineThick), stepLineFilled)
+				rl.DrawRectangleRec(rl.NewRectangle(lineX, lineY, lineW*fillFrac, th), stepLineFilled)
 			}
 		} else {
-			lineX := c1.X - st.LineThick/2
+			th := st.LineThick
+			lineX := c1.X - th/2
+			if PreferGeometryCoverageAA() {
+				th = 1
+				lineX = float32(int32(c1.X))
+			}
 			lineY := c1.Y + r + 3
 			lineH := c2.Y - r - 3 - lineY
 			if lineH < 1 {
 				lineH = 1
 			}
-			rl.DrawRectangleRec(rl.NewRectangle(lineX, lineY, st.LineThick, lineH), stepLineEmpty)
+			rl.DrawRectangleRec(rl.NewRectangle(lineX, lineY, th, lineH), stepLineEmpty)
 			if fillFrac > 0 {
-				rl.DrawRectangleRec(rl.NewRectangle(lineX, lineY, st.LineThick, lineH*fillFrac), stepLineFilled)
+				rl.DrawRectangleRec(rl.NewRectangle(lineX, lineY, th, lineH*fillFrac), stepLineFilled)
 			}
 		}
 	}
@@ -335,7 +344,6 @@ func (st *Stepper) drawInternal() {
 // drawStepCircle renders the circle indicator for one step.
 func (st *Stepper) drawStepCircle(center rl.Vector2, r float32, state StepState, num int, hovered bool) {
 	cx, cy := center.X, center.Y
-	segs := int32(math.Max(24, math.Pi*float64(r)))
 
 	// Keep numbers visually centered inside fixed-size circles. They use the SDF
 	// path, but opt out of the larger body-text floor that would crowd the icon.
@@ -353,42 +361,37 @@ func (st *Stepper) drawStepCircle(center rl.Vector2, r float32, state StepState,
 	switch state {
 	case StepPending:
 		// White fill + grey border ring.
-		rl.DrawCircleV(center, r, stepCirclePendingFill)
+		DrawCoverageCircle(cx, cy, r, stepCirclePendingFill)
 		if hovered {
-			// Faint indigo tint on hover.
-			rl.DrawCircleV(center, r, rl.NewColor(79, 70, 229, 18))
+			DrawCoverageCircle(cx, cy, r, rl.NewColor(79, 70, 229, 18))
 		}
-		rl.DrawRing(center, r-2, r, 0, 360, segs, stepCirclePendingBorder)
-		// Grey number.
+		DrawCoverageRing(cx, cy, r-1, r, 0, 360, stepCirclePendingBorder)
 		ns.TextColor = stepCirclePendingBorder
 		nStr := fmt.Sprintf("%d", num)
 		nW := measureTextS(nStr, ns)
 		nH := int32(EffectiveFontSize(ns))
+		popLCD := PushLCDSurfaceBackdrop(stepCirclePendingFill)
 		drawTextS(nStr, int32(cx)-nW/2, int32(cy)-nH/2, ns)
+		PopLCDSurfaceBackdrop(popLCD)
 
 	case StepActive:
-		// Subtle outer glow ring.
-		glowSegs := int32(math.Max(24, math.Pi*float64(r+5)))
-		rl.DrawCircleV(center, r+5, rl.NewColor(79, 70, 229, 28))
-		_ = glowSegs
-		// Filled indigo circle.
-		rl.DrawCircleV(center, r, stepCircleActive)
+		DrawCoverageCircle(cx, cy, r, stepCircleActive)
 		if hovered {
-			// Brighter on hover.
-			rl.DrawCircleV(center, r, rl.NewColor(255, 255, 255, 20))
+			DrawCoverageCircle(cx, cy, r, rl.NewColor(255, 255, 255, 20))
 		}
-		// White number.
 		ns.TextColor = rl.White
 		nStr := fmt.Sprintf("%d", num)
 		nW := measureTextS(nStr, ns)
 		nH := int32(EffectiveFontSize(ns))
+		popLCD := PushLCDSurfaceBackdrop(stepCircleActive)
 		drawTextS(nStr, int32(cx)-nW/2, int32(cy)-nH/2, ns)
+		PopLCDSurfaceBackdrop(popLCD)
 
 	case StepCompleted:
 		// Filled indigo circle.
-		rl.DrawCircleV(center, r, stepCircleDone)
+		DrawCoverageCircle(cx, cy, r, stepCircleDone)
 		if hovered {
-			rl.DrawCircleV(center, r, rl.NewColor(255, 255, 255, 20))
+			DrawCoverageCircle(cx, cy, r, rl.NewColor(255, 255, 255, 20))
 		}
 		icon := r * 1.15
 		inner := rl.NewRectangle(cx-icon/2, cy-icon/2, icon, icon)

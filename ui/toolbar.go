@@ -405,6 +405,29 @@ func (tb *Toolbar) SetItemSuppressed(itemID string, suppressed bool) {
 	}
 }
 
+// SelectRibbonTabForItem switches the active ribbon tab to the one that owns itemID
+// so a context cell (e.g. Settings → Back) is actually visible.
+func (tb *Toolbar) SelectRibbonTabForItem(itemID string) bool {
+	if tb == nil || !tb.Ribbon {
+		return false
+	}
+	for _, g := range tb.Groups {
+		for _, item := range g.items {
+			if item.id != itemID {
+				continue
+			}
+			if tb.ActiveGroup.Get() != g.TabIndex {
+				tb.ActiveGroup.Set(g.TabIndex)
+			}
+			tb.syncRibbonItemVisibility()
+			tb.MarkDirty()
+			tb.MarkDrawDirty()
+			return true
+		}
+	}
+	return false
+}
+
 // ─── Item builder helpers ─────────────────────────────────────────────────────
 
 // AddButton adds a Button item to the named group.  Returns tb for chaining.
@@ -1490,7 +1513,7 @@ func (tb *Toolbar) drawRibbonTabs() {
 
 		textW := float32(measureTextS(name, ts))
 		tx := int32(r.X + (r.Width-textW)/2)
-		ty := TextPosY(r, ts)
+		ty := toolbarTextPosY(r, ts)
 		drawTextS(name, tx, ty, ts)
 	}
 

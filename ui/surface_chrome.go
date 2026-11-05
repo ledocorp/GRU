@@ -4,9 +4,10 @@ package ui
 
 import rl "github.com/gen2brain/raylib-go/raylib"
 
-// drawPopupRoundedBorder strokes a floating overlay (calendar, menu popup) on the
-// outer layout bounds. Unlike chromeBorderBounds inset, this keeps all four edges
-// equally visible when no parent scissor clips the right gutter.
+// drawPopupRoundedBorder strokes a floating overlay on the outer layout bounds.
+// Prefer DrawRoundedInsetBorder when the fill color is known (G1.1 coverage AA).
+// This helper keeps a fill+border path for callers that only pass the stroke color
+// by punching with white — prefer the two-color DrawRoundedInsetBorder API.
 func drawPopupRoundedBorder(bounds rl.Rectangle, cornerRadius, lineWidth float32, color rl.Color) {
 	if lineWidth <= 0 {
 		return
@@ -18,7 +19,7 @@ func drawPopupRoundedBorder(bounds rl.Rectangle, cornerRadius, lineWidth float32
 		float32(int32(bounds.Height+0.5)),
 	)
 	roundness := chromeRoundness(snap, cornerRadius)
-	rl.DrawRectangleRoundedLinesEx(snap, roundness, 16, lineWidth, color)
+	DrawRoundedInsetBorder(snap, roundness, lineWidth, color, rl.NewColor(255, 255, 255, 255))
 }
 
 // chromeBorderBounds insets a rectangle so rounded/box border strokes stay inside
@@ -182,7 +183,7 @@ func drawFlatBottomChromeFill(fillBounds rl.Rectangle, cornerRadius float32, col
 		rl.DrawRectangleRec(fillBounds, color)
 		return
 	}
-	rl.DrawRectangleRounded(fillBounds, r, 6, color)
+	rl.DrawRectangleRounded(fillBounds, r, 64, color)
 	roundZone := cornerRadius
 	if roundZone > fillBounds.Height/2 {
 		roundZone = fillBounds.Height / 2
@@ -224,6 +225,18 @@ func drawFlatBottomChromeBorder(bounds rl.Rectangle, borderWidth, cornerRadius f
 // circles over rect strips produced blocky L-artifacts under SSAA on hello's card.
 // Mid-seams in translucent shadow are not visible the way they are on opaque fills.
 func drawRaisedSurfaceShadow(bounds rl.Rectangle, roundness float32) {
+	// SSAA 1×: one offset layer. Two tessellated rects 1px apart read as a
+	// doubled hairline under the card border (PRESENT_1X_COMPOSITE G1.2).
+	if PreferGeometryCoverageAA() {
+		// Lighter / tighter than C7 — α12 @ +5 still read as a hard bottom rule.
+		sh := rl.NewRectangle(bounds.X+1, bounds.Y+3, bounds.Width, bounds.Height)
+		if roundness > 0.001 {
+			DrawRoundedFill(sh, roundness, rl.NewColor(0, 0, 0, 7))
+		} else {
+			rl.DrawRectangleRec(sh, rl.NewColor(0, 0, 0, 7))
+		}
+		return
+	}
 	outer := rl.NewRectangle(bounds.X+2, bounds.Y+5, bounds.Width+1, bounds.Height+1)
 	inner := rl.NewRectangle(bounds.X+3, bounds.Y+4, bounds.Width, bounds.Height)
 	if roundness > 0.001 {

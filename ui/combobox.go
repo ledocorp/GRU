@@ -379,8 +379,7 @@ func (c *ComboBox) drawPopupUnclipped() {
 	rl.DrawRectangleRec(shadowRect, rl.NewColor(0, 0, 0, 22))
 
 	panelRoundness := float32(0.08)
-	rl.DrawRectangleRounded(pop, panelRoundness, 8, panelBg)
-	rl.DrawRectangleRoundedLinesEx(pop, panelRoundness, 8, 1, panelBorder)
+	DrawRoundedTessInsetBorder(pop, panelRoundness, 1, panelBorder, panelBg)
 
 	fr := c.filterRect()
 	if c.filterFocus {

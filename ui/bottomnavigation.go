@@ -11,7 +11,7 @@ import (
 const (
 	bottomNavDefaultH    = float32(64)
 	bottomNavCompactH    = float32(60) // compact strip (~25% taller than 48px)
-	bottomNavIconSize    = float32(28)
+	bottomNavIconSize    = float32(26)
 	bottomNavCompactIcon = float32(26)
 	bottomNavIconTop     = float32(8)
 	bottomNavLabelGap    = float32(4)
@@ -230,8 +230,8 @@ func (bn *BottomNavigationBar) drawInternal() {
 		))
 		if item.Phosphor != "" {
 			wt := item.PhosphorWeight
-			if wt == "" {
-				wt = PhosphorRegular
+			if wt == "" || (PreferIconSharp1x() && (wt == PhosphorRegular || wt == "")) {
+				wt = PhosphorFill
 			}
 			Phosphor.EnsureLoaded(item.Phosphor, wt)
 			if !Phosphor.Draw(iconDst, item.Phosphor, wt, iconColor) && item.Icon != "" {

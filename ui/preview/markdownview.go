@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	rl "github.com/gen2brain/raylib-go/raylib"
 	"github.com/yuin/goldmark/ast"
 	extast "github.com/yuin/goldmark/extension/ast"
 
@@ -15,7 +16,7 @@ func markdownLayoutDebug() bool {
 }
 
 const (
-	markdownBuildBatch        = 6
+	markdownBuildBatch        = 8
 	markdownBuildFirstBatch   = 4
 	markdownAboveFoldEstimate = float32(520)
 )
@@ -51,11 +52,36 @@ type MarkdownView struct {
 	blockInSection int
 	globalBlockIdx int
 	building       bool
+	parsePending   bool // goldmark parse in flight (SetMarkdownAsync)
 	statusLabel    *ui.RichText
 	aboveFoldDone  bool
 	lastLayoutW    float32
 	layoutSyncedGen int // last buildGen fully laid out at current bounds
 	settleFrames   int  // force remeasure for a few frames after build (resize nudge)
+	pendingBuildCompleteReflow bool // SimulateResizeReflow once after incremental build ends
+	rebuildHadPrior            bool // true when this build replaces existing preview content (live edit)
+	savedScrollY               float32
+	savedScrollAtBottom        bool
+	pendingScrollRestore       bool
+	displayedSource            string // last source committed to the preview lane
+}
+
+// IsBuilding reports whether incremental block mount is still in progress.
+func (m *MarkdownView) IsBuilding() bool {
+	return m != nil && m.building
+}
+
+// IsPreviewBusy reports parse or incremental build work in flight.
+func (m *MarkdownView) IsPreviewBusy() bool {
+	return m != nil && (m.building || m.parsePending)
+}
+
+// DisplayedSource returns the markdown source last committed to the preview lane.
+func (m *MarkdownView) DisplayedSource() string {
+	if m == nil {
+		return ""
+	}
+	return m.displayedSource
 }
 
 // NewMarkdownView creates a scroll host for markdown preview blocks.
@@ -81,6 +107,13 @@ func (m *MarkdownView) Layout() {
 	if m == nil || m.Container == nil {
 		return
 	}
+	// Mid-drag: still run Container.Layout so scroll/lane screen positions track the
+	// pane (otherwise scissor clips everything → blank preview). RichText/Label
+	// already skip AutoHeight remasure while ChromeWindowMoving.
+	if ui.ChromeWindowMoving() {
+		m.Container.Layout()
+		return
+	}
 	w := m.Bounds().Width
 	settling := m.settleFrames > 0 && w > 1
 	firstRealWidth := m.lastLayoutW <= 1 && w > 1
@@ -89,9 +122,12 @@ func (m *MarkdownView) Layout() {
 	needsReflow := (widthChanged || contentChanged || settling) && m.lane != nil && w > 1
 	if needsReflow {
 		m.lane.InvalidateLayoutPassCache()
-		m.invalidatePreviewTextMeasure(m.lane)
+		// Settling alone: keep lastMeasuredW so applyFlexAutoHeightLayout can early-out.
+		if widthChanged || contentChanged {
+			m.invalidatePreviewTextMeasure(m.lane)
+		}
 		m.invalidatePreviewScrollHosts(m.lane)
-		m.lane.MarkDirty()
+		ui.ScheduleLayoutPass(m.lane)
 		if markdownLayoutDebug() {
 			println(fmt.Sprintf("[md-layout] reflow w=%.1f lastW=%.1f settle=%d synced=%d gen=%d width=%v content=%v",
 				w, m.lastLayoutW, m.settleFrames, m.layoutSyncedGen, m.buildGen, widthChanged, contentChanged))
@@ -101,15 +137,19 @@ func (m *MarkdownView) Layout() {
 	if needsReflow {
 		// One follow-up pass after parent assigned lane width (resize nudge).
 		// Avoid a thrashing double-invalidate loop — that broke LaTeX card sizing.
-		m.invalidatePreviewTextMeasure(m.lane)
+		// Use ScheduleLayoutPass (no bubble) — MarkDirty here re-dirtied MarkdownView
+		// after Container.Layout cleared it and left notepad-md-preview[layout] forever.
+		if widthChanged || contentChanged {
+			m.invalidatePreviewTextMeasure(m.lane)
+		}
 		m.invalidatePreviewScrollHosts(m.lane)
 		if m.lane != nil {
 			m.lane.InvalidateLayoutPassCache()
-			m.lane.MarkDirty()
+			ui.ScheduleLayoutPass(m.lane)
 			m.lane.Layout()
 		}
 		if m.scroll != nil {
-			m.scroll.MarkDirty()
+			ui.ScheduleLayoutPass(m.scroll)
 			m.scroll.Layout()
 		}
 		if m.settleFrames > 0 {
@@ -169,26 +209,36 @@ func (m *MarkdownView) SetMarkdown(source string) {
 	if m == nil || m.scroll == nil {
 		return
 	}
-	m.resetBuildState()
+	m.beginBuildGeneration()
+	if strings.TrimSpace(source) == "" {
+		m.clearPreviewContent()
+		return
+	}
 	blocks, src := ParseMarkdownBlocksCached(source)
 	m.startIncrementalBuild(blocks, src)
 }
 
 // SetMarkdownAsync parses on a worker, then builds on the main thread via doc.QueueMain.
+// Existing preview content stays visible until the replacement lane is ready (no blank flash).
 func (m *MarkdownView) SetMarkdownAsync(doc *ui.Document, source string) {
 	if m == nil || m.scroll == nil || doc == nil {
 		m.SetMarkdown(source)
 		return
 	}
 	m.uiDoc = doc
-	m.resetBuildState()
+	m.beginBuildGeneration()
+	if strings.TrimSpace(source) == "" {
+		m.parsePending = false
+		m.clearPreviewContent()
+		return
+	}
 	gen := m.buildGen
+	m.parsePending = true
 
 	ui.SubmitAsyncBg(func() {
-		// Fresh parse (no AST cache): live editor buffers change often and must not
-		// reuse blocks warmed for the markdown showcase fixture in another scene.
 		blocks, src := ParseMarkdownBlocks(source)
 		doc.QueueMain(func() {
+			m.parsePending = false
 			if gen != m.buildGen {
 				return
 			}
@@ -197,10 +247,18 @@ func (m *MarkdownView) SetMarkdownAsync(doc *ui.Document, source string) {
 	})
 }
 
-func (m *MarkdownView) resetBuildState() {
+func (m *MarkdownView) beginBuildGeneration() {
 	m.buildGen++
-	for _, ch := range m.scroll.Children() {
-		m.scroll.RemoveChild(ch.ID())
+	m.rebuildHadPrior = len(m.scroll.Children()) > 0
+	if m.rebuildHadPrior && m.scroll != nil {
+		m.savedScrollY = m.scroll.ScrollY
+		max := m.scroll.OverflowScrollY()
+		m.savedScrollAtBottom = max > 8 && m.savedScrollY >= max-16
+		m.pendingScrollRestore = true
+	} else {
+		m.savedScrollY = 0
+		m.savedScrollAtBottom = false
+		m.pendingScrollRestore = false
 	}
 	m.anchors = make(map[string]ui.Node)
 	m.lane = nil
@@ -216,6 +274,24 @@ func (m *MarkdownView) resetBuildState() {
 	m.lastLayoutW = 0
 	m.layoutSyncedGen = 0
 	m.settleFrames = 0
+	m.pendingBuildCompleteReflow = false
+}
+
+func (m *MarkdownView) clearPreviewContent() {
+	if m == nil || m.scroll == nil {
+		return
+	}
+	for _, ch := range m.scroll.Children() {
+		m.scroll.RemoveChild(ch.ID())
+	}
+	m.lane = nil
+	m.building = false
+	m.displayedSource = ""
+	m.sections = nil
+	m.buildCtx = nil
+	m.rebuildHadPrior = false
+	m.scroll.MarkDirty()
+	m.MarkDirty()
 }
 
 // invalidatePreviewLayout marks the preview lane stale after content rebuilds
@@ -249,8 +325,8 @@ func (m *MarkdownView) RelayoutAfterContentChange() {
 		return
 	}
 	m.ensurePreviewLayoutAfterBuild()
-	if m.settleFrames < 1 {
-		m.settleFrames = 4
+	if m.settleFrames < 2 {
+		m.settleFrames = 2
 	}
 	if w := m.Bounds().Width; w > 1 {
 		m.lastLayoutW = w - 0.26
@@ -258,10 +334,28 @@ func (m *MarkdownView) RelayoutAfterContentChange() {
 	m.Layout()
 }
 
+// NudgeLayoutAfterWidthChange marks preview stale after pane width changes without
+// the full SimulateResizeReflow nudge. Used for throttled mid-drag tracking;
+// settle still uses SimulateResizeReflow once chrome is idle.
+func (m *MarkdownView) NudgeLayoutAfterWidthChange() {
+	if m == nil || m.Container == nil {
+		return
+	}
+	m.ensurePreviewLayoutAfterBuild()
+	if m.settleFrames < 1 {
+		m.settleFrames = 2
+	}
+	if w := m.Bounds().Width; w > 1 {
+		m.lastLayoutW = w - 0.26
+	}
+	m.MarkDirty()
+}
+
 // SimulateResizeReflow applies the same dirty/remeasure path as a 1px window
 // resize without changing the OS window — imperceptible, but unsticks first-paint
-// AutoHeight / LaTeX card sizing that previously needed a manual nudge.
-// Call once after mount / build complete — not every incremental batch.
+// and post-edit AutoHeight / LaTeX card sizing that otherwise needs a manual nudge.
+// Call once after mount / build complete and after coalesced host resize settle —
+// not every incremental batch and never mid-drag (ChromeWindowMoving).
 func (m *MarkdownView) SimulateResizeReflow() {
 	if m == nil || m.Container == nil {
 		return
@@ -309,14 +403,54 @@ func (m *MarkdownView) settlePreviewLayout() {
 	m.Layout()
 }
 
+func (m *MarkdownView) laneLayoutWidth() float32 {
+	if m == nil {
+		return 320
+	}
+	if m.scroll != nil {
+		if clip := m.scroll.ClipBounds(); clip.Width > 80 {
+			return clip.Width
+		}
+		if b := m.scroll.Bounds(); b.Width > 80 {
+			return b.Width
+		}
+	}
+	if b := m.Bounds(); b.Width > 80 {
+		return b.Width
+	}
+	return 320
+}
+
+func (m *MarkdownView) swapScrollLane(lane *ui.Container) {
+	if m == nil || m.scroll == nil || lane == nil {
+		return
+	}
+	for _, ch := range m.scroll.Children() {
+		m.scroll.RemoveChild(ch.ID())
+	}
+	m.scroll.AddChild(lane)
+}
+
+func (m *MarkdownView) applyPendingScrollRestore() {
+	if m == nil || !m.pendingScrollRestore || m.building || m.scroll == nil {
+		return
+	}
+	m.pendingScrollRestore = false
+	if m.savedScrollAtBottom {
+		m.scroll.ScrollToEnd()
+		return
+	}
+	if m.savedScrollY > 0 {
+		m.scroll.RestoreScrollY(m.savedScrollY)
+	}
+}
+
 func (m *MarkdownView) startIncrementalBuild(blocks []ast.Node, src []byte) {
 	// Prefer the caller-supplied parse. Only re-parse when empty (defensive).
 	if len(blocks) == 0 && len(src) > 0 {
 		blocks, src = ParseMarkdownBlocks(string(src))
 	}
-	for _, ch := range m.scroll.Children() {
-		m.scroll.RemoveChild(ch.ID())
-	}
+	m.displayedSource = string(src)
 	lane := ui.NewContainer(m.ID()+"-lane", 0, 0, 0, 0)
 	lane.SetStyle("preview-lane")
 	lane.LayoutType = ui.LayoutFlex
@@ -329,8 +463,7 @@ func (m *MarkdownView) startIncrementalBuild(blocks []ast.Node, src []byte) {
 	m.buildCtx.doc = m.uiDoc
 	m.buildCtx.source = src
 	if markdownBlocksNeedFootnotes(blocks) {
-		gmDoc, _ := parseDocument(string(src))
-		m.buildCtx.footnoteIndexToRef = collectFootnoteIndexToRef(gmDoc)
+		m.buildCtx.footnoteIndexToRef = collectFootnoteIndexFromBlocks(blocks)
 	}
 	baseLink := MarkdownLinkHandler(m.scroll, lane, m.anchors)
 	m.buildCtx.onLink = func(link string) {
@@ -374,12 +507,14 @@ func (m *MarkdownView) startIncrementalBuild(blocks []ast.Node, src []byte) {
 		m.lane.AddChild(m.statusLabel)
 	}
 
-	m.scroll.AddChild(lane)
+	laneW := m.laneLayoutWidth()
+	lane.SetBounds(rl.NewRectangle(0, 0, laneW, 0))
 	m.buildAboveFold()
+	m.swapScrollLane(lane)
 	m.RelayoutAfterContentChange()
 	if !m.building {
 		m.finishBuild()
-		m.SimulateResizeReflow()
+		m.applyPendingScrollRestore()
 	}
 	m.scroll.MarkDirty()
 	m.MarkDirty()
@@ -465,10 +600,13 @@ func (m *MarkdownView) appendSectionBlocks(n int) int {
 	if m.sectionIndex >= len(m.sections) {
 		m.building = false
 		m.finishBuild()
-		m.SimulateResizeReflow()
+		// One-shot 1px settle after every completed mount (first paint and live edits).
+		// RelayoutAfterContentChange alone can leave cards/RichText one frame stale until
+		// a real window resize — dogfood: type → preview refresh → misaligned until nudge.
+		m.pendingBuildCompleteReflow = true
+		m.pendingScrollRestore = m.rebuildHadPrior
 		return added
 	}
-	m.RelayoutAfterContentChange()
 	m.lane.MarkDirty()
 	m.scroll.MarkDirty()
 	m.MarkDirty()
@@ -491,25 +629,52 @@ func (m *MarkdownView) finishBuild() {
 	}
 }
 
-// MarkIdleStable finishes any incremental build and clears draw-only dirty flags
-// so the UI cache can drop to deep idle with the preview pane open.
+// MarkIdleStable clears draw-only dirty flags when incremental build is done.
+// Does not sync-build the full document — that blocked Notepad preview toggles.
 func (m *MarkdownView) MarkIdleStable() {
 	if m == nil {
 		return
 	}
-	m.ensureFullyBuilt()
-	m.building = false
-	if m.lane != nil {
-		m.layoutSyncedGen = m.buildGen
+	if !m.building {
+		if m.lane != nil {
+			m.layoutSyncedGen = m.buildGen
+		}
+		if m.Container != nil {
+			m.lastLayoutW = m.Bounds().Width
+		}
+		ui.ClearDrawDirtySubtree(m)
 	}
-	if m.Container != nil {
-		m.lastLayoutW = m.Bounds().Width
+}
+
+// EnsureAboveFoldBuilt synchronously materializes the first viewport of blocks.
+func (m *MarkdownView) EnsureAboveFoldBuilt() {
+	if m == nil || !m.building {
+		return
 	}
-	ui.ClearDrawDirtySubtree(m)
+	if !m.aboveFoldDone {
+		m.buildAboveFold()
+	}
+	if m.aboveFoldDone && m.statusLabel != nil {
+		m.finishBuild()
+	}
+	m.RelayoutAfterContentChange()
 }
 
 // Update implements Node.Update — appends the next batch of blocks while building.
 func (m *MarkdownView) Update(dt float32) {
+	if ui.ChromeWindowMoving() {
+		m.Container.Update(dt)
+		return
+	}
+	// Session 14: pause incremental mount while the editor is actively typing so
+	// keystrokes are not competing with RelayoutAfterContentChange every frame.
+	if m.building && ui.TypingGestureActive() {
+		m.Container.Update(dt)
+		m.applyPendingScroll()
+		return
+	}
+	wasBuilding := m.building
+	aboveBefore := m.aboveFoldDone
 	if m.building {
 		if !m.aboveFoldDone {
 			m.buildAboveFold()
@@ -517,12 +682,18 @@ func (m *MarkdownView) Update(dt float32) {
 			m.appendSectionBlocks(markdownBuildBatch)
 		}
 		m.flushTrailingFootnotes()
-		m.RelayoutAfterContentChange()
-	} else if m.layoutSyncedGen != m.buildGen && m.Bounds().Width > 1 {
-		m.RelayoutAfterContentChange()
 	} else if m.settleFrames > 0 {
 		m.settlePreviewLayout()
 	}
+	// Full remeasure only when above-fold first lands or build completes — not every batch.
+	if wasBuilding && (!aboveBefore && m.aboveFoldDone || !m.building) {
+		m.RelayoutAfterContentChange()
+	}
+	if m.pendingBuildCompleteReflow && !ui.ChromeWindowMoving() && !ui.TypingGestureActive() {
+		m.pendingBuildCompleteReflow = false
+		m.SimulateResizeReflow()
+	}
+	m.applyPendingScrollRestore()
 	m.Container.Update(dt)
 	m.applyPendingScroll()
 }
@@ -536,6 +707,12 @@ func (m *MarkdownView) EnsureFullyBuilt() {
 func (m *MarkdownView) ensureFullyBuilt() {
 	for m.building {
 		m.appendSectionBlocks(9999)
+	}
+	if m.pendingBuildCompleteReflow {
+		m.pendingBuildCompleteReflow = false
+		m.SimulateResizeReflow()
+	} else if m.lane != nil && m.layoutSyncedGen != m.buildGen {
+		m.RelayoutAfterContentChange()
 	}
 }
 

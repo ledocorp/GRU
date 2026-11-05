@@ -6,7 +6,7 @@ import rl "github.com/gen2brain/raylib-go/raylib"
 
 const (
 	fabMiniDiameter   = float32(56)
-	fabMiniIconSize   = float32(24)
+	fabMiniIconSize   = float32(28)
 	fabExtendedHeight = float32(48)
 	fabMargin         = float32(16)
 	fabBottomLift     = float32(8) // extra gap above parent bottom edge
@@ -184,7 +184,7 @@ func (f *FAB) drawInternal() {
 			r = rect.Height / 2
 		}
 		drawFABShadow(cx, cy, r)
-		rl.DrawCircleV(rl.NewVector2(cx, cy), r, bg)
+		DrawCoverageCircle(cx, cy, r, bg)
 		iconStyle := style
 		iconSize := fabMiniIconSize
 		if iconSize > rect.Width-12 {
@@ -194,8 +194,8 @@ func (f *FAB) drawInternal() {
 		drawn := false
 		if f.phosphorName != "" {
 			wt := f.phosphorWeight
-			if wt == "" {
-				wt = PhosphorRegular
+			if wt == "" || (PreferIconSharp1x() && (wt == PhosphorRegular || wt == "")) {
+				wt = PhosphorFill
 			}
 			drawn = Phosphor.Draw(iconDst, f.phosphorName, wt, iconStyle.TextColor)
 		}
@@ -227,5 +227,5 @@ func (f *FAB) drawInternal() {
 
 func drawFABShadow(cx, cy, r float32) {
 	shadow := rl.NewColor(0, 0, 0, fabShadowAlpha)
-	rl.DrawCircleV(rl.NewVector2(cx, cy+fabShadowOffsetY), r+fabShadowExpand, shadow)
+	DrawCoverageCircle(cx, cy+fabShadowOffsetY, r+fabShadowExpand, shadow)
 }

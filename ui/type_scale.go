@@ -12,16 +12,30 @@ import (
 // RootFontSize/TypeScaleReference (see docs in RefreshTypeScaleFromWindow).
 const TypeScaleReference float32 = 16
 
-// TypeScaleMinRoot is 1rem at narrow widths (see [MinClientWidth]). Keeps body copy
-// readable when the window is at minimum width: default token 18 → ~25 px eff.
-const TypeScaleMinRoot float32 = 22
+// TypeScaleMinRoot is 1rem for phone-column through typical desktop windows.
+// Stable desktop rem (see RefreshTypeScaleFromWindow): everyday resize must not
+// retune chrome type. Kept near the design grid (16) so demos don’t feel oversized;
+// MinFontSize floors still protect menubar/status readability.
+const TypeScaleMinRoot float32 = 18
+
+// TypeScaleLargeRoot / TypeScaleXLRoot bump 1rem only on large canvases.
+// Below TypeScaleLargeWidthPx rem stays at TypeScaleMinRoot — native apps do
+// not shrink body type when the window goes from 1280→1024.
+const (
+	TypeScaleLargeWidthPx int32   = 1920
+	TypeScaleXLWidthPx    int32   = 2560
+	TypeScaleLargeRoot    float32 = 20
+	TypeScaleXLRoot       float32 = 22
+)
 
 // Chrome / utility typography floors (effective pixels after rem scale).
 // Applied via Style.MinFontSize on menubar, statusbar-label, text-editor, etc.
+// Segmented tabs share a floor so Foundry/Showcase don't sit on soft ~14–19px.
 const (
-	TypeScaleMinMenubarPx int32 = 22
-	TypeScaleMinStatusPx  int32 = 19
-	TypeScaleMinEditorPx  int32 = 17
+	TypeScaleMinMenubarPx   int32 = 18
+	TypeScaleMinStatusPx    int32 = 15
+	TypeScaleMinEditorPx    int32 = 14
+	TypeScaleMinSegmentedPx int32 = 15
 )
 
 // RootFontSize is 1rem in window pixels. [EffectiveFontSize] multiplies theme
@@ -55,30 +69,36 @@ func typeScaleFactor() float32 {
 	return RootFontSize / TypeScaleReference
 }
 
-// RefreshTypeScaleFromWindow sets [RootFontSize] from client width (fluid root rem).
-// Wider window → larger 1rem, like responsive html { font-size } / clamp() on the web.
-// [TypeScaleMinRoot] prevents unreadable text at [MinClientWidth] (480).
+// RefreshTypeScaleFromWindow sets [RootFontSize] from client width.
+//
+// Contract (size stability — do not regress):
+//   - Typical desktop widths (MinClientWidth … <1920) share one rem: TypeScaleMinRoot.
+//   - Layout still reflows with the window; chrome type size does not.
+//   - Only large canvases (≥1920 / ≥2560) bump rem — like a larger design density,
+//     not a per-resize fluid clamp.
+//
+// Why: a prior fluid ladder (960→22, 1200→24) made initWindow 1280 seed rem=24 then
+// shrink to rem=22 when the OS settled ~1024. Timing syncs cannot fix a band cliff
+// between the requested window size and the real client size. Native Notepad-class
+// apps keep type size across everyday resize.
+//
+// While [typeScaleResizeHold] is set, RootFontSize is frozen. Studio does not enable
+// hold on the hot path. The API remains for tests / specialized hosts.
 func RefreshTypeScaleFromWindow(w, h int32) {
+	if typeScaleResizeHold {
+		return
+	}
 	dim := w
 	if dim < 1 {
 		dim = h
 	}
 	prev := RootFontSize
 	switch {
-	case dim >= 2560:
-		RootFontSize = 26
-	case dim >= 1920:
-		RootFontSize = 25
-	case dim >= 1600:
-		RootFontSize = 24
-	case dim >= 1400:
-		RootFontSize = 23
-	case dim >= 1200:
-		RootFontSize = 24
-	case dim >= 960:
-		RootFontSize = 22
+	case dim >= TypeScaleXLWidthPx:
+		RootFontSize = TypeScaleXLRoot
+	case dim >= TypeScaleLargeWidthPx:
+		RootFontSize = TypeScaleLargeRoot
 	default:
-		// Narrow / phone column: always use the readability floor.
 		RootFontSize = TypeScaleMinRoot
 	}
 	if RootFontSize < TypeScaleMinRoot {
@@ -88,6 +108,17 @@ func RefreshTypeScaleFromWindow(w, h int32) {
 		LogTypographyReport("resize", w, h, nil)
 	}
 }
+
+var typeScaleResizeHold bool
+
+// SetTypeScaleResizeHold freezes rem during live window resize (S1 anti-thrash).
+// When released, caller should [RefreshTypeScaleFromWindow] once. Breakpoints unchanged.
+func SetTypeScaleResizeHold(hold bool) {
+	typeScaleResizeHold = hold
+}
+
+// TypeScaleResizeHold reports whether rem is frozen for resize.
+func TypeScaleResizeHold() bool { return typeScaleResizeHold }
 
 // LogTypographyReport prints a full typography snapshot to stderr (F6 / [ ] / resize).
 // Use stderr so it stays visible beside TraceLog idle lines in the terminal.
@@ -100,13 +131,13 @@ func LogTypographyReport(reason string, windowW, windowH int32, selected Node) {
 	if fontPath == "" {
 		fontPath = "(raylib default)"
 	}
-	fmt.Fprintf(os.Stderr, "\n--- Gru typography [%s] ---\n", reason)
+	fmt.Fprintf(os.Stderr, "\n--- GoRy typography [%s] ---\n", reason)
 	fmt.Fprintf(os.Stderr, "  overlay=%v  window=%dx%d  width=%d (breakpoint)  minDim=%d\n",
 		ShowTypeScaleOverlay, windowW, windowH, windowW, minDim)
 	fmt.Fprintf(os.Stderr, "  1rem=%.0fpx (floor %.0f)  scale=%.3f  ref=%g  dpi=%.2f  ssaa=%.2fx\n",
 		RootFontSize, TypeScaleMinRoot, typeScaleFactor(), TypeScaleReference, DisplayScale, RenderScale)
-	fmt.Fprintf(os.Stderr, "  super=%v  fluidRoot=%v (1rem tracks width only, not height)\n",
-		SuperFrameActive(), windowW >= 960)
+	fmt.Fprintf(os.Stderr, "  super=%v  stableDesktopRem=%v (1rem flat until width≥%d)\n",
+		SuperFrameActive(), windowW < TypeScaleLargeWidthPx, TypeScaleLargeWidthPx)
 	fmt.Fprintf(os.Stderr, "  backend=%s  font=%s\n", UIFontBackend(), fontPath)
 	fmt.Fprintf(os.Stderr, "  icons=%s\n", Phosphor.IconFontSummary())
 	for _, name := range []string{"default", "input", "button", "form-label", "form-value"} {

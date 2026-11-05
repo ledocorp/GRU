@@ -31,8 +31,6 @@ Gru is maintained under an independent **BDFL** model. **Pull requests are not a
 
 Copyright in Gru platform source: **Shawn Londono** and **LedoCorp**. LedoCorp is the publishing organization (https://ledocorp.org).
 
-Private ops (GitHub commit email, etc.): [`staging/MAINTAINER_LOCAL.md`](../../staging/MAINTAINER_LOCAL.md) — not for public sync.
-
 ---
 
 *LedoCorp / Shawn Londono — Gru (GRU) — GPLv3 · BDFL*

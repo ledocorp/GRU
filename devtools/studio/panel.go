@@ -201,15 +201,14 @@ func (p *Panel) PaintOverlays(windowW, windowH int32, state ToolState) {
 }
 
 func (p *Panel) drawMenuButton(windowW, windowH int32) {
-	btn := MenuButtonRect(windowW, windowH)
+	btn := ui.SnapControlRect(MenuButtonRect(windowW, windowH))
 	bg := rl.NewColor(55, 60, 78, 255)
+	border := rl.NewColor(120, 126, 150, 255)
 	if p.menuHover || p.Open {
 		bg = rl.NewColor(79, 70, 229, 220)
+		border = rl.NewColor(180, 175, 255, 255)
 	}
-	rl.DrawRectangleRounded(btn, 0.25, 6, bg)
-	if p.menuHover || p.Open {
-		rl.DrawRectangleRoundedLines(btn, 0.25, 6, rl.NewColor(140, 130, 255, 255))
-	}
+	ui.DrawRoundedTessInsetBorder(btn, 0.25, 1, border, bg)
 	label := "Menu"
 	if p.Open {
 		label = "Menu -"
@@ -217,9 +216,11 @@ func (p *Panel) drawMenuButton(windowW, windowH int32) {
 	menu := ui.ChromeFooterButtonStyle()
 	menu.TextColor = rl.White
 	tw := ui.MeasureChromeText(label, menu)
-	x := btn.X + (btn.Width-tw)/2
-	y := ui.ChromeTextCenterY(btn, menu)
+	x := float32(int32(btn.X + (btn.Width-tw)/2 + 0.5))
+	y := float32(int32(ui.ChromeTextCenterY(btn, menu) + 0.5))
+	pop := ui.PushLCDSurfaceBackdrop(bg)
 	ui.DrawChromeText(label, x, y, menu)
+	ui.PopLCDSurfaceBackdrop(pop)
 }
 
 func (p *Panel) drawPanel(windowW, windowH int32, state ToolState) {
@@ -255,8 +256,8 @@ func (p *Panel) drawPanel(windowW, windowH int32, state ToolState) {
 		}
 		r := rowRect(panel, i)
 		if p.hoverRow == i {
-			rl.DrawRectangleRounded(r, 0.2, 4, rl.NewColor(79, 70, 229, 255))
-			rl.DrawRectangleRoundedLines(r, 0.2, 4, rl.NewColor(140, 130, 255, 255))
+			r = ui.SnapControlRect(r)
+			ui.DrawRoundedInsetBorder(r, 0.2, 1, rl.NewColor(140, 130, 255, 255), rl.NewColor(79, 70, 229, 255))
 		}
 		y := ui.ChromeTextCenterY(r, body)
 		ui.DrawChromeText(row.label, r.X+10, y, body)

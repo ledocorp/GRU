@@ -69,8 +69,8 @@ func applyDarkAppearancePatches(t Theme) {
 	surfaceMuted := rl.NewColor(28, 30, 40, 255)
 	surfaceHover := rl.NewColor(48, 50, 64, 255)
 	textPrimary := rl.NewColor(232, 234, 244, 255)
-	textMuted := rl.NewColor(160, 164, 184, 255)
-	textSubtle := rl.NewColor(120, 126, 148, 255)
+	textMuted := rl.NewColor(176, 180, 198, 255)   // was 160 — captions must read on dark surfaces
+	textSubtle := rl.NewColor(148, 154, 176, 255) // was 120 — tabs / secondary chrome
 	border := rl.NewColor(58, 62, 78, 255)
 	borderSoft := rl.NewColor(48, 52, 68, 255)
 	accentTab := rl.NewColor(155, 163, 228, 255)       // active ribbon tab — softer than indigo-400
@@ -95,6 +95,11 @@ func applyDarkAppearancePatches(t Theme) {
 		patch(name, bg, textPrimary)
 	}
 
+	// Demo / page titles — light theme keeps near-black; dark must flip or they vanish on navy backdrops.
+	patch("header", transparent, textPrimary)
+	patch("header-subtitle", transparent, textMuted)
+	patch("panel-title", rl.NewColor(42, 44, 58, 255), textPrimary)
+
 	// Chrome strips
 	patch("menubar", surfaceRaised, textPrimary)
 	patch("menubar-hover", surfaceHover, textPrimary)
@@ -111,6 +116,7 @@ func applyDarkAppearancePatches(t Theme) {
 	patch("toolbar-cell", transparent, textPrimary)
 	patch("toolbar-btn", surfaceRaised, textPrimary)
 	patch("toolbar-menu", surfaceRaised, textPrimary)
+	patch("toolbar-menu-value", surfaceRaised, textPrimary)
 	patch("toolbar-toggle-label", transparent, textMuted)
 	patch("bottomnav", surfaceRaised, textMuted)
 	patchBorder("bottomnav", borderSoft)
@@ -132,7 +138,7 @@ func applyDarkAppearancePatches(t Theme) {
 
 	for _, name := range []string{
 		"menubar", "statusbar", "panel", "card", "list-pane", "toolbar-ribbon",
-		"toolbar-btn", "toolbar-menu", "combobox", "dropdown",
+		"toolbar-btn", "toolbar-menu", "toolbar-menu-value", "combobox", "dropdown",
 	} {
 		patchBorder(name, border)
 	}
@@ -287,6 +293,16 @@ func SetAppearance(mode string) {
 // ThemeIsDark reports whether the active appearance resolves to dark chrome.
 func ThemeIsDark() bool {
 	return EffectiveAppearance(currentAppearanceMode) == AppearanceDark
+}
+
+// WindowChromeFill is the opaque client fill used under SSAA blit and on a
+// just-grown edge (DWM otherwise shows Blank as black). Light matches Studio /
+// Notepad canvas; dark uses the appearance canvas so the strip reads as chrome.
+func WindowChromeFill() rl.Color {
+	if ThemeIsDark() {
+		return rl.NewColor(22, 24, 32, 255)
+	}
+	return rl.NewColor(228, 229, 235, 255)
 }
 
 func setListPopupColors(hover, selected, tileHover rl.Color) {

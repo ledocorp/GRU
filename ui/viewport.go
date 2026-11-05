@@ -133,12 +133,12 @@ func NewViewport(id string, x, y, w, h float32) *Viewport {
 }
 
 // SetStyle sets the viewport theme and applies scroll-container defaults.
-// page-scroll and settings-scroll disable ContentClipBleed so panel borders
-// cannot paint into sibling chrome (MenuBar, scrollbar gutter).
+// page-scroll / settings-scroll keep a small bleed so rounded panel corners are
+// not sheared square at the scissor (reads as “cut off” beside the scrollbar).
 func (vp *Viewport) SetStyle(name string) {
 	vp.Container.SetStyle(name)
 	if name == "page-scroll" || name == "settings-scroll" {
-		vp.ContentClipBleed = 0
+		vp.ContentClipBleed = 4
 	}
 }
 
@@ -188,7 +188,7 @@ const pageScrollBarVertInset = float32(1)
 
 // previewScrollPadL/V inset markdown preview scroll host on the left/top/bottom.
 const previewScrollPadL = float32(12)
-const previewScrollPadV = float32(4)
+const previewScrollPadV = float32(8)
 
 // pageScrollPadH is the horizontal inset for page-scroll (content + scrollbar band).
 const pageScrollPadH = float32(16)
@@ -216,14 +216,14 @@ func (vp *Viewport) wheelScrollStep() float32 {
 
 // HandlesWheelScroll implements the wheelConsumer interface.
 //
-// Only vertical viewports opt in. A horizontal strip inside a vertically
-// scrolling page must not block page scroll when the cursor is over it — the
-// strip still scrolls on X in Update() from the same wheel delta.
-//
-// Vertical viewports opt in. Exclusive routing (page vs nested) is handled by
-// PrepareWheelScroll / WheelScrollOwner before Update.
+// Vertical viewports always opt in. Horizontal viewports opt in only when content
+// overflows — see deepHasWheelConsumer / AbsorbsParentWheel (Viewport is skipped
+// in the generic wheelConsumer walk but checked explicitly there).
 func (vp *Viewport) HandlesWheelScroll() bool {
-	return vp.Orientation == ScrollVertical
+	if vp.Orientation == ScrollVertical {
+		return true
+	}
+	return vp.overflowScrollX() > 0
 }
 
 func (vp *Viewport) isPageLevelVerticalViewport() bool {
@@ -243,7 +243,22 @@ func (vp *Viewport) hasAncestorVerticalViewport() bool {
 // its scroll limit in the wheel direction, the parent may scroll instead.
 func (vp *Viewport) AbsorbsParentWheel(wheel float32) bool {
 	if vp.Orientation == ScrollHorizontal {
-		return false
+		maxX := vp.overflowScrollX()
+		if maxX <= 0 {
+			return false
+		}
+		mouse := rl.GetMousePosition()
+		if !rl.CheckCollisionPointRec(mouse, vp.Bounds()) {
+			return false
+		}
+		const eps = float32(0.5)
+		if wheel < 0 && vp.ScrollX >= maxX-eps {
+			return false
+		}
+		if wheel > 0 && vp.ScrollX <= eps {
+			return false
+		}
+		return true
 	}
 	max := vp.overflowScrollY()
 	if max <= 0 {
@@ -355,12 +370,19 @@ func (vp *Viewport) Update(dt float32) {
 	vp.handleScrollbarInput()
 
 	wheel := rl.GetMouseWheelMove()
-	if wheel != 0 && !vp.sbDragging && !chromeWindowMoving {
+	wheelV := rl.GetMouseWheelMoveV()
+	if (wheel != 0 || wheelV.X != 0) && !vp.sbDragging && !chromeWindowMoving {
 		if vp.Orientation == ScrollHorizontal {
 			mouse := rl.GetMousePosition()
 			if rl.CheckCollisionPointRec(mouse, vp.Bounds()) {
 				oldX := vp.ScrollX
-				vp.ScrollX += wheel * vp.wheelScrollStep()
+				step := vp.wheelScrollStep()
+				if wheel != 0 {
+					vp.ScrollX += wheel * step
+				}
+				if wheelV.X != 0 {
+					vp.ScrollX += wheelV.X * step
+				}
 				maxScrollX := vp.overflowScrollX()
 				if vp.ScrollX < 0 {
 					vp.ScrollX = 0
@@ -483,9 +505,13 @@ layoutViewport:
 		prevFlexW := vp.lastFlexW
 		savedW := vp.bounds.Width
 		if boundsChanged {
-			for _, ch := range vp.children {
-				if !ch.IsHidden() {
-					ch.MarkDirty()
+			// Mid-drag: do not MarkDirty every child — that re-armed MarkdownView
+			// layout every pixel and kept F7 traces on notepad-md-preview[layout].
+			if !ChromeWindowMoving() {
+				for _, ch := range vp.children {
+					if !ch.IsHidden() {
+						ch.MarkDirty()
+					}
 				}
 			}
 		}
@@ -493,9 +519,11 @@ layoutViewport:
 		// Widen after shrink: run flex again so column children (grids, panels)
 		// pick up cross-axis width from layoutFlex; then subtree Layout() sees it.
 		if vp.lastFlexValid && savedW > prevFlexW+0.5 {
-			for _, ch := range vp.children {
-				if !ch.IsHidden() {
-					ch.MarkDirty()
+			if !ChromeWindowMoving() {
+				for _, ch := range vp.children {
+					if !ch.IsHidden() {
+						ch.MarkDirty()
+					}
 				}
 			}
 			vp.layoutVerticalScrollContent()
@@ -556,7 +584,7 @@ func (vp *Viewport) layoutHorizontal() {
 		vp.lastFlexValid = false
 	}
 	boundsChangedSinceLayout := !vp.lastCommittedLayoutValid || vp.lastCommittedLayoutW != vp.bounds.Width || vp.lastCommittedLayoutH != vp.bounds.Height
-	if boundsChangedSinceLayout || viewportFlexGeomStale(vp) {
+	if (boundsChangedSinceLayout || viewportFlexGeomStale(vp)) && !ChromeWindowMoving() {
 		for _, ch := range vp.children {
 			if !ch.IsHidden() {
 				ch.MarkDirty()
@@ -1065,9 +1093,8 @@ func (vp *Viewport) contentScissorRect() (x, y, w, h float32) {
 
 	// Horizontal strips clip to the card/panel body; bleed would let nested cards
 	// paint into the caption row above the scroll band (responsive demo).
-	// page-scroll keeps bleed at 0 so content stays inside the padded band.
 	bleed := vp.ContentClipBleed
-	if vp.Orientation == ScrollHorizontal || vp.styleName == "page-scroll" {
+	if vp.Orientation == ScrollHorizontal {
 		bleed = 0
 	}
 	x -= bleed
@@ -1117,6 +1144,8 @@ func (vp *Viewport) Draw() {
 			rl.DrawRectangleLinesEx(bounds, float32(style.BorderWidth), style.BorderColor)
 		}
 	}
+	popLCD := PushLCDSurfaceBackdrop(style.BackgroundColor)
+	defer PopLCDSurfaceBackdrop(popLCD)
 
 	contentX, contentY, contentW, contentH := vp.contentScissorRect()
 
@@ -1181,10 +1210,10 @@ func (vp *Viewport) drawScrollbar() {
 	}
 
 	track := rl.NewRectangle(trackX, trackY, barW, trackH)
-	rl.DrawRectangleRounded(track, 1, 6, viewportScrollTrackColor)
+	DrawRoundedFill(track, 1, viewportScrollTrackColor)
 
 	thumb := rl.NewRectangle(trackX+1, thumbY, barW-2, thumbH)
-	rl.DrawRectangleRounded(thumb, 1, 6, viewportScrollThumbColor)
+	DrawRoundedFill(thumb, 1, viewportScrollThumbColor)
 }
 
 // drawHorizontalScrollbar renders a horizontal scrollbar track and thumb at the bottom.
@@ -1193,10 +1222,10 @@ func (vp *Viewport) drawHorizontalScrollbar() {
 	trackY, thumbX, thumbW, _ := vp.horizThumbGeom(bounds)
 
 	track := rl.NewRectangle(bounds.X, trackY, bounds.Width, vp.scrollbarHeight)
-	rl.DrawRectangleRounded(track, 1, 6, viewportScrollTrackColor)
+	DrawRoundedFill(track, 1, viewportScrollTrackColor)
 
 	thumb := rl.NewRectangle(thumbX, trackY+1, thumbW, vp.scrollbarHeight-2)
-	rl.DrawRectangleRounded(thumb, 1, 6, viewportScrollThumbColor)
+	DrawRoundedFill(thumb, 1, viewportScrollThumbColor)
 }
 
 // vertTrackRect returns the vertical scrollbar track rectangle.
@@ -1316,6 +1345,23 @@ func (vp *Viewport) ScrollToShowNode(node, contentRoot Node) {
 	vp.MarkDirty()
 }
 
+// OverflowScrollY reports vertical overflow scroll range.
+func (vp *Viewport) OverflowScrollY() float32 {
+	return vp.overflowScrollY()
+}
+
+// ScrollToEnd scrolls to the bottom of the current content.
+func (vp *Viewport) ScrollToEnd() {
+	if vp == nil {
+		return
+	}
+	vp.calculateContentHeight()
+	vp.ScrollY = vp.overflowScrollY()
+	vp.clampScrollY()
+	vp.scrollDirty = true
+	vp.MarkDirty()
+}
+
 func (vp *Viewport) clampScrollY() {
 	if vp.ScrollY < 0 {
 		vp.ScrollY = 0
@@ -1323,6 +1369,22 @@ func (vp *Viewport) clampScrollY() {
 	if max := vp.overflowScrollY(); vp.ScrollY > max {
 		vp.ScrollY = max
 	}
+}
+
+// RestoreScrollY sets ScrollY after content changes (e.g. live preview rebuild) and
+// reclamps against the current content height.
+func (vp *Viewport) RestoreScrollY(y float32) {
+	if vp == nil {
+		return
+	}
+	if y < 0 {
+		y = 0
+	}
+	vp.ScrollY = y
+	vp.calculateContentHeight()
+	vp.clampScrollY()
+	vp.scrollDirty = true
+	vp.MarkDirty()
 }
 
 func (vp *Viewport) clampScrollX() {

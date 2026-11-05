@@ -121,8 +121,8 @@ func TestPageScrollContentRespectsPadding(t *testing.T) {
 	if b.Width > wantW+0.5 {
 		t.Fatalf("header width %.0f exceeds content budget %.0f", b.Width, wantW)
 	}
-	if vp.ContentClipBleed != 0 {
-		t.Fatalf("page-scroll bleed = %v, want 0", vp.ContentClipBleed)
+	if vp.ContentClipBleed != 4 {
+		t.Fatalf("page-scroll bleed = %v, want 4 (corner AA room beside scrollbar)", vp.ContentClipBleed)
 	}
 }
 

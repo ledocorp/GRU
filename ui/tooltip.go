@@ -96,11 +96,11 @@ func tooltipChooseSide(anchor rl.Rectangle, popW, popH float32, winW, winH int32
 // alpha is multiplied into every colour channel to produce the fade effect.
 func drawTooltipPopup(text string, anchor rl.Rectangle, alpha float32, winW, winH int32) {
 	style := GetThemeStyle("tooltip")
-	fs := EffectiveFontSize(style)
 	pad := style.Padding
 	tw := float32(measureTextS(text, style))
+	lineBox := TextLineBoxHeight(style)
 	popW := tw + pad*2
-	popH := fs + pad*2
+	popH := lineBox + pad*2
 
 	x, y := tooltipChooseSide(anchor, popW, popH, winW, winH)
 
@@ -144,7 +144,8 @@ func drawTooltipPopup(text string, anchor rl.Rectangle, alpha float32, winW, win
 	tc := style.TextColor
 	tc.A = uint8(float32(tc.A) * alpha)
 	textStyle.TextColor = tc
-	posY := int32(y) + int32((popH-fs)/2)
+	textBand := rl.NewRectangle(x+pad, y+pad, tw, lineBox)
+	posY := controlTextPosY(textBand, textStyle)
 	drawTextS(text, int32(x+pad), posY, textStyle)
 }
 

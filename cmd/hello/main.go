@@ -62,7 +62,7 @@ func main() {
 	titleBar.HandleResize = true
 	titleBar.SetSize(windowW, windowH)
 
-	bg := rl.NewColor(228, 229, 235, 255)
+	bg := ui.WindowChromeFill()
 	borderless := true
 	windowShown := false
 	rl.SetTargetFPS(60)
@@ -76,6 +76,7 @@ func main() {
 		ui.SetActiveDocument(doc)
 		dt := rl.GetFrameTime()
 		doc.DrainQueue()
+		bg = ui.WindowChromeFill()
 
 		nw, nh := int32(rl.GetScreenWidth()), int32(rl.GetScreenHeight())
 		if nw < 1 {
@@ -90,6 +91,9 @@ func main() {
 		}
 
 		titleBar.Update(windowW, windowH)
+		if w, h, ok := ui.SyncBorderlessClientIfChanged(doc, titleBar, windowW, windowH); ok {
+			windowW, windowH = w, h
+		}
 		ui.SyncBorderlessChromeFrame(titleBar)
 		titleBar.ApplyResizeCursor(windowW, windowH)
 		ui.SyncBorderlessInputFrame(titleBar, doc.Root, dt)
@@ -101,7 +105,7 @@ func main() {
 		ui.Toasts.Update(dt)
 		ui.Tooltips.Update(dt)
 
-		if doc.NeedsRedraw() && ui.SuperTargetDrawable() {
+		if (doc.NeedsRedraw() || ui.SuperTargetNeedsFill()) && ui.SuperTargetDrawable() {
 			ui.BeginSuperFrame(bg, borderless, windowW, windowH)
 			doc.Root.Draw()
 			titleBar.Draw()
@@ -119,6 +123,7 @@ func main() {
 		ui.Tooltips.Draw()
 		ui.Toasts.Draw()
 		rl.EndDrawing()
+		ui.SettleBorderlessClientTextures(titleBar)
 
 		if !windowShown {
 			rl.ClearWindowState(uint32(rl.FlagWindowHidden))

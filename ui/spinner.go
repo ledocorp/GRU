@@ -198,7 +198,7 @@ func (sp *Spinner) drawInternal() {
 	}
 
 	// ── Track (full ring) ─────────────────────────────────────────────────────
-	rl.DrawRing(rl.NewVector2(geom.cx, geom.cy), geom.inner, geom.outer, 0, 360, 36, sp.TrackColor)
+	DrawCoverageRingSharp(geom.cx, geom.cy, geom.inner, geom.outer, 0, 360, sp.TrackColor)
 
 	// ── Arc ───────────────────────────────────────────────────────────────────
 	if sp.Determinate {
@@ -212,8 +212,8 @@ func (sp *Spinner) drawInternal() {
 		}
 		sweep := p * 360
 		if sweep > 0.5 {
-			rl.DrawRing(rl.NewVector2(geom.cx, geom.cy), geom.inner, geom.outer,
-				-90, -90+sweep, geom.steps, sp.Color)
+			DrawCoverageRingSharp(geom.cx, geom.cy, geom.inner, geom.outer,
+				-90, -90+sweep, sp.Color)
 		}
 
 		// Percentage label at ring centre.
@@ -258,7 +258,7 @@ func (sp *Spinner) DrawAnimationOverlay() {
 	if !ok {
 		return
 	}
-	rl.DrawRing(rl.NewVector2(geom.cx, geom.cy), geom.inner, geom.outer, 0, 360, 36, sp.TrackColor)
+	DrawCoverageRingSharp(geom.cx, geom.cy, geom.inner, geom.outer, 0, 360, sp.TrackColor)
 	sp.drawIndeterminateArc(geom)
 }
 
@@ -332,5 +332,5 @@ func (sp *Spinner) drawIndeterminateArc(geom spinnerGeometry) {
 	breathSweep := float32(210) + 60*float32(0.5+0.5*math.Sin(float64(sp.breathT)))
 	startDeg := sp.angle - 90
 	endDeg := startDeg + breathSweep
-	rl.DrawRing(rl.NewVector2(geom.cx, geom.cy), geom.inner, geom.outer, startDeg, endDeg, geom.steps, sp.Color)
+	DrawCoverageRingSharp(geom.cx, geom.cy, geom.inner, geom.outer, startDeg, endDeg, sp.Color)
 }

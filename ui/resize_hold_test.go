@@ -31,3 +31,18 @@ func TestResizeHoldTrackerIdleCooldown(t *testing.T) {
 		t.Fatal("cooldown should end after ResizeIdleCooldown")
 	}
 }
+
+func TestClampTargetFPSForResizeHold(t *testing.T) {
+	if got := ClampTargetFPSForResizeHold(DeepIdleFPS, true); got != ActiveFPS {
+		t.Fatalf("hold+idle: got %d want ActiveFPS", got)
+	}
+	if got := ClampTargetFPSForResizeHold(ScrollFPS, true); got != ActiveFPS {
+		t.Fatalf("hold+scroll: got %d want ActiveFPS", got)
+	}
+	if got := ClampTargetFPSForResizeHold(DeepIdleFPS, false); got != DeepIdleFPS {
+		t.Fatalf("no hold: got %d want DeepIdleFPS", got)
+	}
+	if got := ClampTargetFPSForResizeHold(ActiveFPS, true); got != ActiveFPS {
+		t.Fatalf("hold+active: got %d want ActiveFPS", got)
+	}
+}

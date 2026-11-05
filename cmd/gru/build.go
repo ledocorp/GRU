@@ -83,7 +83,7 @@ var products = map[string]appProduct{
 	},
 	"notepad": {
 		id:        "notepad",
-		pkg:       ".",
+		pkg:       "./cmd/grunotepad",
 		tags:      "notepad",
 		binaryWin: "GruNotepad",
 		binaryNix: "gru-notepad",
@@ -283,6 +283,7 @@ func buildProduct(prod appProduct, target buildTarget, outPath string) error {
 	}
 
 	fmt.Printf("building %s %s/%s -> %s\n", prod.id, target.goos, target.goarch, outPath)
+// Default CGO builds link gen/fxlib emit-C (same tier as raylib). Set GRU_FX_*=0 to force Go fallbacks.
 	args := []string{"build", "-trimpath", "-ldflags", productLDFlags(prod), "-o", outPath}
 	if tags != "" {
 		args = append(args, "-tags", tags)

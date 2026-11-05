@@ -1149,26 +1149,17 @@ func (c *Container) layoutGrid() {
 	rowTopY := startY
 	rowMaxH := float32(0)
 
-	// pendingRow collects (child, bounds) pairs for the current row so we can
-	// set final positions after we know the row height.
-	type pending struct {
-		child  Node
-		bounds rl.Rectangle
-	}
-	var rowPending []pending
-	type gridRowInfo struct {
-		children []Node
-		topY     float32
-		height   float32
-	}
-	var gridRows []gridRowInfo
+	scratch := acquireGridLayoutScratch()
+	defer releaseGridLayoutScratch(scratch)
+	rowPending := scratch.rowPending
+
 	rowTopAtFlush := startY
 	flushRow := func() {
 		if len(rowPending) == 0 {
 			return
 		}
 		rh := rowMaxH
-		rowChildren := make([]Node, 0, len(rowPending))
+		rowChildren := scratch.rowChildren[:0]
 		for _, p := range rowPending {
 			b := p.bounds
 			// Cross-axis stretch: if child height is 0, fill the row height.
@@ -1178,12 +1169,17 @@ func (c *Container) layoutGrid() {
 			p.child.SetBounds(b)
 			rowChildren = append(rowChildren, p.child)
 		}
-		gridRows = append(gridRows, gridRowInfo{
-			children: rowChildren,
+		scratch.rowChildren = rowChildren
+		// Copy children — scratch.rowChildren is reused; aliasing would leave every
+		// EqualFill row pointing at the last flush's backing array.
+		rowCopy := append([]Node(nil), rowChildren...)
+		scratch.gridRows = append(scratch.gridRows, gridRowScratch{
+			children: rowCopy,
 			topY:     rowTopAtFlush,
 			height:   rh,
 		})
 		rowPending = rowPending[:0]
+		scratch.rowPending = rowPending
 		colCursor = 0
 		rowTopY += rowMaxH + c.Gap
 		rowTopAtFlush = rowTopY
@@ -1242,7 +1238,8 @@ func (c *Container) layoutGrid() {
 			rowMaxH = extH
 		}
 
-		rowPending = append(rowPending, pending{child, b})
+		rowPending = append(rowPending, gridPendingItem{child: child, bounds: b})
+		scratch.rowPending = rowPending
 		colCursor += span
 		rowX += childW + c.Gap
 
@@ -1268,10 +1265,10 @@ func (c *Container) layoutGrid() {
 	distributed := false
 	// EqualFill: opt-in viewport band split (docs/LAYOUT_CONTRACTS.md §4).
 	if c.GridRowSizing == GridRowSizingEqualFill &&
-		c.GetFlexGrow() > 0 && innerTarget > contentH+0.5 && len(gridRows) > 0 {
-		perRow := innerTarget / float32(len(gridRows))
+		c.GetFlexGrow() > 0 && innerTarget > contentH+0.5 && len(scratch.gridRows) > 0 {
+		perRow := innerTarget / float32(len(scratch.gridRows))
 		y := startY
-		for _, row := range gridRows {
+		for _, row := range scratch.gridRows {
 			for _, ch := range row.children {
 				b := ch.Bounds()
 				b.Y = y
@@ -1283,7 +1280,7 @@ func (c *Container) layoutGrid() {
 		}
 		c.bounds.Height = assignedOuterH
 		distributed = true
-		for _, row := range gridRows {
+		for _, row := range scratch.gridRows {
 			for _, ch := range row.children {
 				if !ch.IsHidden() {
 					ch.Layout()
@@ -1304,7 +1301,11 @@ func (c *Container) layoutGrid() {
 // rebuildSortedCache rebuilds the ZIndex-sorted child slice.
 // Called at the end of Layout() when child order may have changed.
 func (c *Container) rebuildSortedCache() {
-	c.sortedCache = make([]Node, len(c.children))
+	if cap(c.sortedCache) < len(c.children) {
+		c.sortedCache = make([]Node, len(c.children))
+	} else {
+		c.sortedCache = c.sortedCache[:len(c.children)]
+	}
 	copy(c.sortedCache, c.children)
 	sort.Slice(c.sortedCache, func(i, j int) bool {
 		return c.sortedCache[i].GetZIndex() < c.sortedCache[j].GetZIndex()
@@ -1350,6 +1351,8 @@ func (c *Container) drawInternal() {
 			rl.DrawRectangleLinesEx(bounds, float32(style.BorderWidth), style.BorderColor)
 		}
 	}
+	popLCD := PushLCDSurfaceBackdrop(style.BackgroundColor)
+	defer PopLCDSurfaceBackdrop(popLCD)
 
 	// Sort children by ZIndex for layering (cached, rebuilt only on Layout)
 	sortedChildren := c.sortedChildren()

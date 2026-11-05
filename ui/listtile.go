@@ -5,14 +5,16 @@ package ui
 import rl "github.com/gen2brain/raylib-go/raylib"
 
 const (
-	listTilePadX       float32 = 14
+	listTilePadX       float32 = 16
+	listTilePadY       float32 = 10
 	listTileLeadingGap float32 = 12
 	listTileIconGap    float32 = 16
 	listTileLeadingW   float32 = 40
-	listTileH         float32 = 56
-	listTileDenseH    float32 = 48
-	listTileToggleW   float32 = 47
-	listTileToggleH   float32 = 25
+	listTileH          float32 = 64
+	listTileDenseH     float32 = 56
+	listTileToggleW    float32 = 47
+	listTileToggleH    float32 = 25
+	listTileTitleSubGap float32 = 5
 )
 
 // ListTileRowMode controls how a list row participates in pointer input.
@@ -276,6 +278,8 @@ func listTileLeadingTextGap(lt *ListTile) float32 {
 }
 
 func listTileDrawChrome(b rl.Rectangle, style Style, selected, hovered bool) {
+	// 1px hairline AA at SSAA 1× (drawRoundedInsetBorder). Row text uses
+	// PushLCDSurfaceBackdrop (white dest).
 	bg := style.BackgroundColor
 	if bg.A == 0 {
 		bg = rl.NewColor(255, 255, 255, 255)
@@ -296,7 +300,7 @@ func listTileDrawChrome(b rl.Rectangle, style Style, selected, hovered bool) {
 		drawRoundedInsetBorder(b, roundness, bw, borderCol, bg)
 	} else if bg.A > 0 {
 		if roundness > 0 {
-			rl.DrawRectangleRounded(b, roundness, 8, bg)
+			DrawRoundedFill(b, roundness, bg)
 		} else {
 			rl.DrawRectangleRec(b, bg)
 		}
@@ -304,12 +308,23 @@ func listTileDrawChrome(b rl.Rectangle, style Style, selected, hovered bool) {
 	if hovered && !selected {
 		if listTileHoverOverlay.A > 0 {
 			if roundness > 0 {
-				rl.DrawRectangleRounded(b, roundness, 8, listTileHoverOverlay)
+				DrawRoundedFill(b, roundness, listTileHoverOverlay)
 			} else {
 				rl.DrawRectangleRec(b, listTileHoverOverlay)
 			}
 		}
 	}
+}
+
+func listTileLCDBackdrop(style Style, selected bool) rl.Color {
+	bg := style.BackgroundColor
+	if bg.A == 0 {
+		bg = rl.NewColor(255, 255, 255, 255)
+	}
+	if selected {
+		bg = listOptionSelectedBg
+	}
+	return bg
 }
 
 func listTileLeadingSize(n Node) (w, h float32) {
@@ -446,15 +461,16 @@ func listTileTrailingSize(n Node, dense bool) (w, h float32) {
 		if dense {
 			h = 22
 		}
-		if lbl.PreferredWidth > 0 {
-			return lbl.PreferredWidth, h
-		}
 		style := lbl.GetStyle()
-		w = float32(measureTextS(lbl.Text.Get(), style)) + 8
-		if w < 48 {
-			w = 48
+		// LCD ink often wider than measureTextS; keep slack so "50%" isn’t clipped.
+		need := float32(measureTextS(lbl.Text.Get(), style)) + 16
+		if lbl.PreferredWidth > need {
+			need = lbl.PreferredWidth
 		}
-		return w, h
+		if need < 36 {
+			need = 36
+		}
+		return need, h
 	}
 	b := n.Bounds()
 	if b.Width > 0 && b.Height > 0 {
@@ -469,6 +485,13 @@ func listTileTrailingMinWidth(n Node) float32 {
 	}
 	if ib, ok := n.(*IconButton); ok && ib.PreferredWidth > 0 {
 		return ib.PreferredWidth
+	}
+	if lbl, ok := n.(*Label); ok {
+		need := float32(measureTextS(lbl.Text.Get(), lbl.GetStyle())) + 16
+		if lbl.PreferredWidth > need {
+			need = lbl.PreferredWidth
+		}
+		return need
 	}
 	return 0
 }
@@ -497,8 +520,18 @@ func (lt *ListTile) contentBandHeight() float32 {
 			subStyle.FontSize = 12
 		}
 	}
-	block := float32(EffectiveFontSize(titleStyle)) + 6 + float32(EffectiveFontSize(subStyle))
-	want := block + 10 // descenders (g, y) need a little room below the subtitle baseline
+	titleBox := TextLineBoxHeight(titleStyle)
+	if titleBox < 1 {
+		titleBox = EffectiveFontSize(titleStyle)
+	}
+	subBox := TextLineBoxHeight(subStyle)
+	if subBox < 1 {
+		subBox = EffectiveFontSize(subStyle)
+	}
+	want := titleBox + listTileTitleSubGap + subBox + 2*listTilePadY
+	if lt.Dense {
+		want = titleBox + listTileTitleSubGap + subBox + 2*(listTilePadY-2)
+	}
 	if want < base {
 		return base
 	}
@@ -615,6 +648,8 @@ func (lt *ListTile) drawInternal() {
 			}
 		}
 	}
+	popLCD := PushLCDSurfaceBackdrop(listTileLCDBackdrop(style, lt.Selected))
+	defer PopLCDSurfaceBackdrop(popLCD)
 
 	textX := b.X + listTilePadX
 	if lt.Leading != nil {
@@ -648,20 +683,42 @@ func (lt *ListTile) drawInternal() {
 			subStyle.FontSize = 12
 		}
 		subStyle.Bold = false
-		subStyle.TextColor = rl.NewColor(100, 106, 128, 255)
+		subStyle.TextColor = rl.NewColor(72, 78, 100, 255)
 	}
 
 	titleFS := EffectiveFontSize(titleStyle)
+	titleBox := TextLineBoxHeight(titleStyle)
+	if titleBox < titleFS {
+		titleBox = titleFS
+	}
 	subFS := EffectiveFontSize(subStyle)
+	subBox := TextLineBoxHeight(subStyle)
+	if subBox < subFS {
+		subBox = subFS
+	}
 
 	if lt.Subtitle == "" {
-		titleY := int32(b.Y) + (int32(b.Height)-int32(titleFS))/2
+		titleY := TextPosY(b, titleStyle)
 		drawTextS(truncateTextS(lt.Title, maxTextW, titleStyle), int32(textX), titleY, titleStyle)
 	} else {
-		blockH := titleFS + 6 + subFS
-		startY := b.Y + (b.Height-float32(blockH))/2
+		blockH := titleBox + listTileTitleSubGap + subBox
+		padY := listTilePadY
+		if lt.Dense {
+			padY = listTilePadY - 2
+		}
+		startY := b.Y + (b.Height-blockH)/2
+		if startY < b.Y+padY {
+			startY = b.Y + padY
+		}
+		bottom := startY + blockH
+		if bottom > b.Y+b.Height-padY {
+			startY = b.Y + b.Height - padY - blockH
+			if startY < b.Y+padY {
+				startY = b.Y + padY
+			}
+		}
 		drawTextS(truncateTextS(lt.Title, maxTextW, titleStyle), int32(textX), int32(startY), titleStyle)
-		drawTextS(truncateTextS(lt.Subtitle, maxTextW, subStyle), int32(textX), int32(startY+float32(titleFS)+6), subStyle)
+		drawTextS(truncateTextS(lt.Subtitle, maxTextW, subStyle), int32(textX), int32(startY+titleBox+listTileTitleSubGap), subStyle)
 	}
 
 	if lt.Leading != nil {

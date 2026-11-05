@@ -9,7 +9,8 @@ import (
 // applyTextEngineMode configures shaped vs SDF per T1.6-R.
 //
 // Notepad release (-tags notepad) defaults to shaped text. Dev builds opt in with
-// GRU_SHAPED_TEXT=1 (GORY_SHAPED_TEXT alias). Set GRU_SHAPED_TEXT=0 to force SDF (regression compare).
+// GRU_SHAPED_TEXT=1 (GORY_SHAPED_TEXT alias). Set GRU_SHAPED_TEXT=0 to force SDF.
+// Text Engine demo uses BeginShapedTextSession (scoped) — no Studio-wide auto flip.
 func applyTextEngineMode() {
 	switch shapedTextEnv() {
 	case "0":

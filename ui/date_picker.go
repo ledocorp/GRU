@@ -20,10 +20,10 @@ const (
 	dpPopInnerW  float32 = dpPad*2 + float32(calDaysPerWeek)*dpCellW
 	dpPopInnerH  float32 = dpPad + dpHeaderH + dpDowH + float32(calWeeks)*dpCellH + dpPad
 	dpPopMaxScale float32 = 1.15 // popup width may grow with field, up to this × base
-	dpFadeIn     float32 = 0.12
-	dpFadeOut    float32 = 0.10
-	dpSkipFrames int     = 2
-	dpDayFontSize float32 = 16
+	dpFadeIn      float32 = 0.12
+	dpFadeOut     float32 = 0.10
+	dpSkipFrames  int     = 2
+	dpDayFontSize float32 = 15 // docs only; day labels use form-label via drawTextS
 )
 
 // DatePicker is a compact field that shows the current [Signal] date and opens
@@ -200,16 +200,15 @@ func (dp *DatePicker) drawInternal() {
 			}
 		}
 	}
+	bw := style.BorderWidth
+	if bw <= 0 {
+		bw = 1
+	}
 	if r > 0 {
-		rl.DrawRectangleRounded(bounds, r, 8, bg)
-		if style.BorderWidth > 0 {
-			rl.DrawRectangleRoundedLinesEx(bounds, r, 8, style.BorderWidth, borderCol)
-		}
+		DrawRoundedInsetBorder(bounds, r, bw, borderCol, bg)
 	} else {
 		rl.DrawRectangleRec(bounds, bg)
-		if style.BorderWidth > 0 {
-			rl.DrawRectangleLinesEx(bounds, style.BorderWidth, borderCol)
-		}
+		rl.DrawRectangleLinesEx(bounds, bw, borderCol)
 	}
 
 	val := dp.Value.Get()
@@ -228,26 +227,23 @@ func (dp *DatePicker) drawInternal() {
 	}
 	drawTextS(truncateTextS(label, textMaxW, drawStyle), int32(bounds.X+fieldTextPad), TextPosY(bounds, style), drawStyle)
 
-	// Calendar glyph / chevron
-	arrowR := float32(9)
-	arrowX := bounds.X + bounds.Width - 26
-	arrowY := bounds.Y + bounds.Height/2
-	arrowCol := rl.NewColor(110, 112, 128, 255)
-	if open {
-		rl.DrawTriangle(
-			rl.NewVector2(arrowX, arrowY+arrowR*0.5),
-			rl.NewVector2(arrowX+arrowR*2, arrowY+arrowR*0.5),
-			rl.NewVector2(arrowX+arrowR, arrowY-arrowR*0.5),
-			arrowCol,
-		)
-	} else {
-		rl.DrawTriangle(
-			rl.NewVector2(arrowX, arrowY-arrowR*0.5),
-			rl.NewVector2(arrowX+arrowR*2, arrowY-arrowR*0.5),
-			rl.NewVector2(arrowX+arrowR, arrowY+arrowR*0.5),
-			arrowCol,
-		)
+	// Chevron — Remix caret (not tessellated triangle).
+	iconSz := float32(18)
+	if iconSz > bounds.Height-8 {
+		iconSz = bounds.Height - 8
 	}
+	dst := snapPhosphorRect(rl.NewRectangle(
+		bounds.X+bounds.Width-fieldArrowGutter+4,
+		bounds.Y+(bounds.Height-iconSz)/2,
+		iconSz, iconSz,
+	))
+	arrowCol := rl.NewColor(110, 112, 128, 255)
+	name := PhosphorCaretDown
+	if open {
+		name = PhosphorCaretUp
+	}
+	Phosphor.EnsureLoaded(name, PhosphorFill)
+	Phosphor.Draw(dst, name, PhosphorFill, arrowCol)
 }
 
 // ── datePickerManager (singleton overlay) ───────────────────────────────────
@@ -639,14 +635,16 @@ func (m *datePickerManager) Draw() {
 		}
 	}
 
-	rl.DrawRectangleRounded(rl.NewRectangle(popRec.X+2, popRec.Y+4, popRec.Width, popRec.Height), popRound, 12, mul(rl.NewColor(0, 0, 20, 55)))
-	rl.DrawRectangleRounded(popRec, popRound, 12, mul(rl.NewColor(255, 255, 255, 255)))
-	drawPopupRoundedBorder(popRec, 10, 1.5, mul(rl.NewColor(198, 200, 214, 255)))
+	DrawRoundedFill(rl.NewRectangle(popRec.X+2, popRec.Y+4, popRec.Width, popRec.Height), popRound, mul(rl.NewColor(0, 0, 20, 55)))
+	DrawRoundedInsetBorder(popRec, popRound, 1.5, mul(rl.NewColor(198, 200, 214, 255)), mul(rl.NewColor(255, 255, 255, 255)))
 
 	title := m.monthHeaderText()
-	tw := MeasureText(title, 17)
-	tx := m.popX + (m.popW-tw)/2
-	DrawText(title, tx, m.popY+dpPad+8, 17, mul(rl.NewColor(40, 42, 58, 255)))
+	titleSt := calendarTitleTextStyle()
+	titleSt.TextColor = calendarTextColor(titleSt.TextColor, m.fade)
+	tw := float32(measureTextS(title, titleSt))
+	tx := int32(m.popX + (m.popW-tw)/2 + 0.5)
+	titleRect := rl.NewRectangle(m.popX, m.popY+dpPad, m.popW, dpHeaderH)
+	drawTextS(title, tx, TextPosY(titleRect, titleSt), titleSt)
 
 	// Nav buttons
 	drawMiniNav(m.prevBtn, true, mul)
@@ -658,11 +656,14 @@ func (m *datePickerManager) Draw() {
 	if cw <= 0 {
 		cw = dpCellW
 	}
+	dowSt := calendarDowTextStyle()
+	dowSt.TextColor = calendarTextColor(dowSt.TextColor, m.fade)
 	for c, d := range dows {
 		cx := m.gridOriginX + float32(c)*cw
 		cy := m.popY + dpPad + dpHeaderH
-		tw2 := MeasureText(d, 12)
-		DrawText(d, cx+(cw-tw2)/2, cy+4, 12, mul(rl.NewColor(120, 122, 140, 255)))
+		tw2 := float32(measureTextS(d, dowSt))
+		cell := rl.NewRectangle(cx, cy, cw, dpDowH)
+		drawTextS(d, int32(cx+(cw-tw2)/2+0.5), TextPosY(cell, dowSt), dowSt)
 	}
 
 	today := dateTruncLocal(time.Now())
@@ -687,7 +688,7 @@ func (m *datePickerManager) Draw() {
 		if isSel {
 			paint.Fill = rl.NewColor(238, 242, 255, 255)
 			paint.Ring = rl.NewColor(79, 70, 229, 255)
-			paint.RingWidth = 1.5
+			paint.RingWidth = 1.75
 		} else if isHover {
 			paint.Fill = rl.NewColor(226, 228, 234, 255)
 		} else if isFocus {
@@ -700,33 +701,33 @@ func (m *datePickerManager) Draw() {
 		paintCalendarDay(cr, paint, mul)
 
 		ds := fmt.Sprintf("%d", cell.Date.Day())
-		dtw := MeasureText(ds, dpDayFontSize)
-		tc := mul(rl.NewColor(38, 40, 52, 255))
+		tc := calendarTextColor(rl.NewColor(38, 40, 52, 255), m.fade)
 		if isSel || (isFocus && !isHover) {
-			tc = mul(rl.NewColor(55, 48, 163, 255))
+			tc = calendarTextColor(rl.NewColor(55, 48, 163, 255), m.fade)
 		}
-		DrawText(ds, cr.X+(cr.Width-dtw)/2, cr.Y+(dpCellH-float32(dpDayFontSize))/2, dpDayFontSize, tc)
+		center, _ := dayCellDisc(cr)
+		drawCalendarDayNumber(ds, center, tc)
 	}
 }
 
 func drawMiniNav(r rl.Rectangle, left bool, mul func(rl.Color) rl.Color) {
-	midY := r.Y + r.Height/2
-	rl.DrawRectangleRounded(r, 0.35, 6, mul(rl.NewColor(240, 240, 246, 255)))
-	rl.DrawRectangleRoundedLinesEx(r, 0.35, 6, 1, mul(rl.NewColor(200, 202, 215, 255)))
-	c := mul(rl.NewColor(70, 72, 90, 255))
-	if left {
-		rl.DrawTriangle(
-			rl.NewVector2(r.X+r.Width*0.62, midY-r.Height*0.22),
-			rl.NewVector2(r.X+r.Width*0.62, midY+r.Height*0.22),
-			rl.NewVector2(r.X+r.Width*0.32, midY),
-			c,
-		)
-	} else {
-		rl.DrawTriangle(
-			rl.NewVector2(r.X+r.Width*0.38, midY-r.Height*0.22),
-			rl.NewVector2(r.X+r.Width*0.38, midY+r.Height*0.22),
-			rl.NewVector2(r.X+r.Width*0.68, midY),
-			c,
-		)
+	r = snapControlRect(r)
+	// Tess fill only — coverage fill left dark speckles on straight edges (C15).
+	roundness := float32(0.35)
+	rl.DrawRectangleRounded(r, roundness, 32, mul(rl.NewColor(236, 237, 244, 255)))
+	name := PhosphorCaretLeft
+	if !left {
+		name = PhosphorCaretRight
 	}
+	iconSz := float32(18)
+	if iconSz > r.Height-8 {
+		iconSz = r.Height - 8
+	}
+	dst := snapPhosphorRect(rl.NewRectangle(
+		r.X+(r.Width-iconSz)/2,
+		r.Y+(r.Height-iconSz)/2,
+		iconSz, iconSz,
+	))
+	Phosphor.EnsureLoaded(name, PhosphorFill)
+	Phosphor.Draw(dst, name, PhosphorFill, mul(rl.NewColor(70, 72, 90, 255)))
 }

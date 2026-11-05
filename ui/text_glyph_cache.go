@@ -15,8 +15,11 @@ import (
 )
 
 // T1.8 — shaped glyph cache: rasterize go-text outlines → dynamic atlas → batched quads.
-// Complex-script draw is always on when shaped engine is active; GRU_SHAPED_GLYPH_CACHE=1
-// (GORY_SHAPED_GLYPH_CACHE alias) forces Latin onto the outline path (dev experiment only).
+// Complex-script draw is always on when shaped engine is active.
+//
+// Latin outline (GRU_SHAPED_GLYPH_CACHE=1) is a Text Engine / experiment flag only.
+// Do NOT auto-enable for Studio chrome: wrap layout uses measure widths while outline
+// draw uses shaped advances — mismatch collapses/overlaps Demo Directory PlainText.
 
 const shapedGlyphCacheMaxEntries = 4096
 
@@ -49,9 +52,15 @@ func shapedGlyphCacheEnabled() bool {
 	return EnvOr("GRU_SHAPED_GLYPH_CACHE", "GORY_SHAPED_GLYPH_CACHE") == "1"
 }
 
-// ShapedGlyphCacheEnvEnabled reports GRU_SHAPED_GLYPH_CACHE (GORY alias; Latin outline draw — demo only).
+// ShapedGlyphCacheEnvEnabled reports GRU_SHAPED_GLYPH_CACHE (Latin outline — experiment only).
 func ShapedGlyphCacheEnvEnabled() bool {
 	return shapedGlyphCacheEnabled()
+}
+
+// PreferShapedTextForQuality is reserved for hosts that opt into shaped Latin carefully.
+// Studio does not auto-flip on lean SSAA (see text_engine_rollout.go).
+func PreferShapedTextForQuality() bool {
+	return false
 }
 
 func initShapedGlyphCache() {
@@ -128,11 +137,7 @@ func shapedGlyphCacheStore(face *font.Face, gid font.GID, sizePx float32, e shap
 }
 
 func shapedGlyphSSAA() float32 {
-	s := EffectiveSupersamplingScale()
-	if s < 1 {
-		return 1
-	}
-	return s
+	return EffectiveGlyphSupersample()
 }
 
 func shapedGlyphRasterPx(fontSize float32) float32 {
@@ -164,13 +169,16 @@ func rasterShapedGlyph(face *font.Face, gid font.GID, fontSize, rasterPx float32
 		return shapedGlyphCacheEntry{}, false
 	}
 	scale, w, h, ox, oy := shapedGlyphRasterLayout(outline, ext, rasterPx, face.Upem())
-	gc := gg.NewContext(w, h)
-	gc.SetRGBA(0, 0, 0, 0)
-	gc.Clear()
-	gc.SetRGBA(1, 1, 1, 1)
-	drawGlyphOutlineGG(gc, outline, scale, ox, oy)
 	ssaa := shapedGlyphSSAA()
-	img := gc.Image()
+	img, okFX := tryRasterShapedGlyphFX(outline, scale, w, h, ox, oy)
+	if !okFX {
+		gc := gg.NewContext(w, h)
+		gc.SetRGBA(0, 0, 0, 0)
+		gc.Clear()
+		gc.SetRGBA(1, 1, 1, 1)
+		drawGlyphOutlineGG(gc, outline, scale, ox, oy)
+		img = gc.Image()
+	}
 	tex, src, ok := shapedAtlasPackGlyph(img)
 	entry := shapedGlyphCacheEntry{
 		width:   float32(w) / ssaa,
@@ -201,7 +209,7 @@ func shapedGlyphRasterLayout(outline font.GlyphOutline, ext font.GlyphExtents, s
 		minX, maxX = float64(ext.XBearing), float64(ext.XBearing+ext.Width)
 		minY, maxY = float64(ext.YBearing-ext.Height), float64(ext.YBearing)
 	}
-	const pad = 2.0
+	const pad = 3.0
 	w = int(math.Ceil((maxX-minX)*scale)) + int(pad*2)
 	h = int(math.Ceil((maxY-minY)*scale)) + int(pad*2)
 	if w < 4 {
@@ -478,6 +486,9 @@ func rasterShapedGlyphImage(face *font.Face, gid font.GID, fontSize float32) (im
 		return nil, false
 	}
 	scale, w, h, ox, oy := shapedGlyphRasterLayout(outline, ext, rasterPx, face.Upem())
+	if img, ok := tryRasterShapedGlyphFX(outline, scale, w, h, ox, oy); ok {
+		return img, true
+	}
 	gc := gg.NewContext(w, h)
 	gc.SetRGBA(0, 0, 0, 0)
 	gc.Clear()
