@@ -125,21 +125,19 @@ func InitFTGreyAuxFaces() {
 	initOneFTGreyAux(&ftMonoFamily, ftFaceMono, "mono/Fira")
 	initOneFTGreyAux(&ftPreviewFamily, ftFacePreview, "preview/Inter")
 	ftAuxInitOnce.Do(func() {
-		fmt.Printf("Gru: S1 faces — chrome=%s mono=%s preview=%s bold=%s aux=%s\n",
+		aux := "ft-grey"
+		switch {
+		case PreferAuxFaceLCD():
+			aux = "lcd"
+		case PreferAuxFaceDWriteGrey():
+			aux = "dwrite-grey"
+		}
+		gruLog("Gru: S1 faces — chrome=%s mono=%s preview=%s bold=%s aux=%s",
 			baseName(LoadedUIFontPath),
 			baseName(ftMonoFamily.path),
 			baseName(ftPreviewFamily.path),
 			baseName(ftPreviewFamily.boldPath),
-			func() string {
-				switch {
-				case PreferAuxFaceLCD():
-					return "lcd"
-				case PreferAuxFaceDWriteGrey():
-					return "dwrite-grey"
-				default:
-					return "ft-grey"
-				}
-			}(),
+			aux,
 		)
 	})
 }
@@ -201,7 +199,7 @@ func initOneFTGreyAux(fam *ftGreyAuxFamily, kind ftFaceKind, label string) {
 	atlas, glyphs, ink, ok := packFTGreyAtlas(face, pixelSize)
 	_ = face.Close()
 	if !ok {
-		fmt.Printf("Gru: S1 aux %s atlas failed (ink=%d)\n", label, ink)
+		gruLog("Gru: S1 aux %s atlas failed (ink=%d)", label, ink)
 		return
 	}
 	tex := GoImageToTexture(atlas)

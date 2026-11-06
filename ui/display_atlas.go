@@ -1,8 +1,12 @@
 package ui
 
 import (
+	"sync"
+
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
+
+var androidDensityLogOnce sync.Once
 
 // T1.9 — DPR-scaled source atlases (SDF text + Remix icons). Layout stays logical;
 // FlagWindowHighdpi remains off. SSAA is not multiplied by DisplayScale.
@@ -85,6 +89,13 @@ func InitDisplayAwareAtlases() {
 	RefreshDisplayScale()
 	RefreshDensity()
 	atlasForGlyphScale = EffectiveGlyphDisplayScale()
+	androidDensityLogOnce.Do(func() {
+		if !AndroidGLES() {
+			return
+		}
+		gruLog("Gru: Android density=%.2f DisplayScale=%.2f glyphScale=%.2f Dp(48)=%.0f SSAA=%.2f",
+			Density(), DisplayScale, atlasForGlyphScale, Dp(48), EffectiveSupersamplingScale())
+	})
 	InitIcons(EffectiveRemixAtlasSize())
 	if LoadedUIFontPath == "" {
 		LoadedUIFontPath = firstExisting(resolvedFontCandidates()...)

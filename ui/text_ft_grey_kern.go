@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"fmt"
 	"math"
 	"sync"
 
@@ -27,7 +26,7 @@ func ensureFTGreyKern() bool {
 		ftGreyKernReady = InitShapedFonts()
 		if ftGreyKernReady {
 			ftGreyKernLogOnce.Do(func() {
-				fmt.Println("Gru: ft-grey sticky kerning via HarfBuzz (liga off; GPOS kern)")
+				gruLog("Gru: ft-grey sticky kerning via HarfBuzz (liga off; GPOS kern)")
 			})
 		}
 	})

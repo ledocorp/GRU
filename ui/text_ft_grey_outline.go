@@ -2,7 +2,6 @@ package ui
 
 import (
 	"bytes"
-	"fmt"
 	"image"
 	"math"
 	"strings"
@@ -118,7 +117,7 @@ func logInterVFBoldOnce(fontPath string, bold bool, pixelSize int, vars []gotext
 				opsz = v.Value
 			}
 		}
-		fmt.Printf("Gru: Inter VF bold strikes — wght=%.0f opsz=%.0f (no static SemiBold; path=%s @%dpx)\n",
+		gruLog("Gru: Inter VF bold strikes — wght=%.0f opsz=%.0f (no static SemiBold; path=%s @%dpx)",
 			wght, opsz, fontPath, pixelSize)
 	})
 }
@@ -343,7 +342,7 @@ func logFTGreyOutlineBake() {
 		if fxGlyphBackendActive() {
 			backend = "fx"
 		}
-		fmt.Printf("Gru: ft-grey sticky outline AA via %s @%d× bake→1× (Windows DWrite analogue on Linux)\n",
+		gruLog("Gru: ft-grey sticky outline AA via %s @%d× bake→1× (Windows DWrite analogue on Linux)",
 			backend, stickyOutlineBakeSSAA())
 	})
 }

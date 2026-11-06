@@ -16,7 +16,7 @@ pkill -f '/.android/scrcpy/scrcpy' 2>/dev/null || true
 sleep 0.5
 
 adb wait-for-device
-adb shell am start -n org.ledocorp.gru.demo/android.app.NativeActivity >/dev/null 2>&1 || true
+adb shell am start -n org.ledocorp.gru.demo/.MainActivity >/dev/null 2>&1 || true
 
 export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-1}"
 unset DISPLAY || true

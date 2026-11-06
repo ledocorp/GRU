@@ -72,12 +72,14 @@ Stub side: `(!windows && !linux) || android` on `platform_other.go`, `ui/appeara
 | `rl.OpenAsset` | `ui/assetfs.go` | APK `assets/` tree |
 | `AndroidGLES()` | `ui/assetfs.go` | True on Android |
 | SDF fonts | `ui/font.go` | Skipped on GLES (GLSL 330) |
+| Coverage AA / LCD / MSDF | `draw_coverage_aa.go`, `text_ft_lcd.go`, `text_msdf.go` | Desktop GLSL **330** — gated off via `AndroidGLES()` (no logcat compile spam; seam-safe / greyscale sticky instead) |
 | Sticky text | `ui/text_ft_grey*.go` | **Same S1 path as Linux**: outline→fx AA greyscale strikes (not desktop-only). Bitmap/SDF are fallback only. |
 | Soft-bold | `assets/fonts/poppins/` | Must include **Medium** + **SemiBold** (copied by `scripts/android/build-*.sh` from repo `assets/`). Without them chrome Bold falls back to 700. |
+| `gruLog` | `ui/gru_log.go` | S1 diagnostics → `rl.TraceLog(Warning)` on Android so they appear in logcat (`adb logcat -s raylib:W`) |
 
 `scripts/android/build-grudemo.sh` (and hello) sync `assets/fonts|icons|web` into `packaging/android/<app>/assets/` at build time — keep Medium/SemiBold in the **repo** `assets/fonts/poppins/` tree (packaging copies are gitignored).
 
-Present: SSAA **1×**, MSAA **off** (EGL). Density / `Dp` for chrome: [ANDROID_DENSITY.md](ANDROID_DENSITY.md). Do **not** copy Linux `DisplayScale=1` onto phones — Android keeps width/dpi buckets for T1.9 atlases while rem/chrome use `Density`.
+Present: SSAA **1×**, MSAA **off** (EGL). Density / `Dp` for chrome: [ANDROID_DENSITY.md](ANDROID_DENSITY.md). Do **not** copy Linux `DisplayScale=1` onto phones — Android keeps width/dpi buckets for T1.9 atlases while rem/chrome use `Density`. Launch: `adb shell am start -n org.ledocorp.gru.demo/.MainActivity`.
 
 ---
 

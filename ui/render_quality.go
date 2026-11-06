@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"fmt"
 	"strings"
 	"sync"
 )
@@ -36,7 +35,7 @@ var s1DefaultsLogOnce sync.Once
 func applyS1Defaults() {
 	applyStudioDogfoodQuality()
 	s1DefaultsLogOnce.Do(func() {
-		fmt.Println("Gru: S1 defaults — lean SSAA 1× + ft-grey strikes (+ LCD when available)")
+		gruLog("Gru: S1 defaults — lean SSAA 1× + ft-grey strikes (+ LCD when available)")
 	})
 }
 
@@ -50,7 +49,7 @@ func applyStudioDogfoodQuality() {
 
 func printSSAA1Warning() {
 	ssaa1WarnOnce.Do(func() {
-			fmt.Println("Gru: GRU_SSAA=1 — smaller RT; atlases stay DPI-sized (not boosted); Latin outline + fx AA when shaped")
+		gruLog("Gru: GRU_SSAA=1 — smaller RT; atlases stay DPI-sized (not boosted); Latin outline + fx AA when shaped")
 	})
 }
 
@@ -101,12 +100,12 @@ func ApplyRenderQualityFromEnv() {
 		BaseSupersamplingScale = 1
 		GlyphSupersampleFloor = 4
 		minimalWarnOnce.Do(func() {
-			fmt.Println("Gru: RENDER_QUALITY minimal/1× — smaller SSAA RT; atlases DPI-only; Latin outline when shaped")
+			gruLog("Gru: RENDER_QUALITY minimal/1× — smaller SSAA RT; atlases DPI-only; Latin outline when shaped")
 		})
 	case "":
 		SetRenderQuality(RenderQualityNative)
 	default:
-		fmt.Printf("Gru: unknown GRU_RENDER_QUALITY=%q (use max|balanced|lean|minimal)\n", qName)
+		gruLog("Gru: unknown GRU_RENDER_QUALITY=%q (use max|balanced|lean|minimal)", qName)
 	}
 
 	if ssaa != "" {
@@ -123,7 +122,7 @@ func ApplyRenderQualityFromEnv() {
 		case "2", "2.0":
 			BaseSupersamplingScale = 2
 		default:
-			fmt.Printf("Gru: unknown GRU_SSAA=%q (use 1|1.5|2)\n", ssaa)
+			gruLog("Gru: unknown GRU_SSAA=%q (use 1|1.5|2)", ssaa)
 		}
 		if qName == "" && BaseSupersamplingScale <= 1.5 && GlyphSupersampleFloor < 2 {
 			GlyphSupersampleFloor = 2
