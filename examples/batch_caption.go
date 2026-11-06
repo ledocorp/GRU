@@ -2,8 +2,9 @@ package examples
 
 import "github.com/ledocorp/gru/ui"
 
-// batchCaption is panel helper copy — transparent body text (not "default",
-// which paints a white bordered box behind the string).
+// batchCaption is panel helper / hint copy — form-label (muted caption), not
+// form-value (near-black 18pt readout). Using form-value made Counter Demo
+// body look heavy next to the lean header-subtitle intro.
 func batchCaption(id, text string) *ui.RichText {
-	return FlexCopy(id, "form-value", text)
+	return FlexCopy(id, "form-label", text)
 }

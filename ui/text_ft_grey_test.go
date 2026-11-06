@@ -3,6 +3,7 @@ package ui
 import (
 	"image"
 	"image/color"
+	"os"
 	"testing"
 
 	"github.com/golang/freetype/truetype"
@@ -489,5 +490,36 @@ func TestSnapFTGreyStrikeSizeExact(t *testing.T) {
 	want := (float32(16) / 48) * ftGreyOpticalScale
 	if absFloat32(pa-want) > 0.001 {
 		t.Fatalf("Path A scale drifted: %v want %v", pa, want)
+	}
+}
+
+// TestFTGreyOutlineBaselineLock guards the "100:" float bug: outline bakes must
+// have integer bearings and digits must share one baseline (bottom of "1" and
+// "0" differ only by the round overshoot of "0", never by a whole-pixel drift).
+func TestFTGreyOutlineBaselineLock(t *testing.T) {
+	data, err := os.ReadFile("../assets/fonts/poppins/Poppins-Regular.ttf")
+	if err != nil {
+		t.Skip("no font")
+	}
+	for _, px := range []int{12, 13, 14, 15, 16, 18, 22} {
+		_, glyphs, _, ok := packFTGreyAtlasOutline(data, px, 2)
+		if !ok {
+			t.Fatalf("pack failed @%d", px)
+		}
+		for r, g := range glyphs {
+			if !g.hasInk {
+				continue
+			}
+			if g.bearingX != float32(int(g.bearingX)) || g.bearingY != float32(int(g.bearingY)) {
+				t.Fatalf("@%d %q fractional bearing (%v,%v)", px, r, g.bearingX, g.bearingY)
+			}
+		}
+		one, zero := glyphs['1'], glyphs['0']
+		bottom1 := one.bearingY + one.src.Height
+		bottom0 := zero.bearingY + zero.src.Height
+		d := bottom1 - bottom0
+		if d < -1 || d > 1 {
+			t.Fatalf("@%d digit baselines drift: '1' bottom=%v '0' bottom=%v", px, bottom1, bottom0)
+		}
 	}
 }

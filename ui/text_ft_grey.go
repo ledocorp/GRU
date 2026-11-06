@@ -59,7 +59,12 @@ var (
 	ftGreyWarn           sync.Once
 	ftGreyTTFData        []byte
 	ftGreyTTF            *truetype.Font
+	ftGreyRegularPath    string
+	ftGreyBoldPath       string
+	ftGreyBoldTTFData    []byte
+	ftGreyBoldTTF        *truetype.Font
 	ftGreyStrikes        map[int]*ftGreyStrike
+	ftGreyBoldStrikes    map[int]*ftGreyStrike // Poppins Medium/SemiBold (or Segoe Bold)
 	ftGreyPlainStrikes   map[int]*ftGreyStrike // grey-only sticky (transparent hosts)
 	ftGreyStrikeLRU      []int
 	ftGreyStrikeSSAAWarn sync.Once
@@ -152,7 +157,7 @@ func stickyStrikeSizes() []int {
 	} else {
 		base = ftGreyStrikeStickySizes
 	}
-	// Client-px ladder — dpi=1 identity (atlases still use DisplayScale via T1.9).
+	// Identity client-px ladder (Linux DisplayScale=1; Windows densify via T1.9 only).
 	out := make([]int, len(base))
 	copy(out, base)
 	return out
@@ -360,7 +365,10 @@ func InitFTGreyFont(pixelSize int32) bool {
 		ftGreyTTFData = data
 		ftGreyTTF = ttf
 		ftGreyStrikes = make(map[int]*ftGreyStrike)
+		ftGreyBoldStrikes = make(map[int]*ftGreyStrike)
 		ftGreyStrikeLRU = ftGreyStrikeLRU[:0]
+		ftGreyRegularPath = path
+		loadFTGreyChromeBoldFace(path)
 		ftGreyStrikeSSAAWarn.Do(func() {
 			if EffectiveSupersamplingScale() > 1.01 {
 				fmt.Println("Gru: ft-grey+strikes — dogfood with GRU_SSAA=1 (scene SSAA>1 fights exact strikes)")
@@ -376,14 +384,98 @@ func InitFTGreyFont(pixelSize int32) bool {
 			_ = ensureFTLCDShader()
 		}
 		prewarmFTGreyStickyStrikes()
-		fmt.Printf("Gru: ft-grey sticky strikes baked=%d ladder=%v\n", len(ftGreyStrikes), stickyStrikeSizes())
+		fmt.Printf("Gru: ft-grey sticky strikes baked=%d bold=%d ladder=%v\n",
+			len(ftGreyStrikes), len(ftGreyBoldStrikes), stickyStrikeSizes())
 	} else {
 		ftGreyTTFData = nil
 		ftGreyTTF = nil
+		ftGreyBoldTTFData = nil
+		ftGreyBoldTTF = nil
+		ftGreyBoldPath = ""
 		ftGreyStrikes = nil
+		ftGreyBoldStrikes = nil
 		ftGreyStrikeLRU = nil
 	}
 	return true
+}
+
+func chromeRegularIsPoppins(regularPath string) bool {
+	b := strings.ToLower(baseName(regularPath))
+	return strings.Contains(b, "poppins")
+}
+
+func poppinsChromeMediumCandidates() []string {
+	return []string{
+		"assets/fonts/poppins/Poppins-Medium.ttf",
+		"assets/fonts/Poppins/static/Poppins-Medium.ttf",
+		"assets/fonts/Poppins-Medium.ttf",
+	}
+}
+
+func poppinsChromeSemiBoldCandidates() []string {
+	return []string{
+		"assets/fonts/poppins/Poppins-SemiBold.ttf",
+		"assets/fonts/Poppins/static/Poppins-SemiBold.ttf",
+		"assets/fonts/Poppins-SemiBold.ttf",
+	}
+}
+
+// resolveFTGreyChromeBoldPath picks a chrome "Bold" face.
+// Poppins Bold (700) reads much heavier than Segoe Bold under greyscale outline AA —
+// that made Studio look "deep bold" once chrome Bold stopped being a no-op. Match Inter
+// preview policy: Medium ≤18px, else SemiBold, else Bold. Windows Segoe stays segoeuib.
+func resolveFTGreyChromeBoldPath(regularPath string) string {
+	return resolveFTGreyChromeBoldPathForSize(regularPath, 20)
+}
+
+func resolveFTGreyChromeBoldPathForSize(regularPath string, sz int) string {
+	if chromeRegularIsPoppins(regularPath) || (regularPath == "" && firstExisting("assets/fonts/poppins/Poppins-Regular.ttf") != "") {
+		if sz <= 18 {
+			if p := firstExisting(poppinsChromeMediumCandidates()...); p != "" {
+				return p
+			}
+		}
+		if p := firstExisting(poppinsChromeSemiBoldCandidates()...); p != "" {
+			return p
+		}
+	}
+	for _, set := range poppinsFaceCandidates() {
+		if set.regular != "" && (regularPath == set.regular || baseName(regularPath) == baseName(set.regular)) {
+			if p := firstExisting(set.bold); p != "" {
+				return p
+			}
+		}
+	}
+	return firstExisting(
+		"C:/Windows/Fonts/segoeuib.ttf",
+		"assets/fonts/poppins/Poppins-Bold.ttf",
+		"assets/fonts/Poppins/static/Poppins-Bold.ttf",
+		"assets/fonts/poppins/Poppins-SemiBold.ttf",
+		"assets/fonts/Poppins-Bold.ttf",
+	)
+}
+
+func loadFTGreyChromeBoldFace(regularPath string) {
+	ftGreyBoldPath = ""
+	ftGreyBoldTTFData = nil
+	ftGreyBoldTTF = nil
+	boldPath := resolveFTGreyChromeBoldPath(regularPath)
+	if boldPath == "" || boldPath == regularPath {
+		return
+	}
+	bdata, err := ReadAssetFile(boldPath)
+	if err != nil {
+		return
+	}
+	bttf, err := truetype.Parse(bdata)
+	if err != nil {
+		return
+	}
+	ftGreyBoldPath = boldPath
+	ftGreyBoldTTFData = bdata
+	ftGreyBoldTTF = bttf
+	fmt.Printf("Gru: ft-grey chrome soft-bold %s (≤18 Medium / else SemiBold; Bold only as fallback)\n",
+		baseName(boldPath))
 }
 
 func packFTGreyAtlas(face font.Face, pixelSize int32) (*image.RGBA, map[rune]ftGreyGlyph, int, bool) {
@@ -630,6 +722,15 @@ func prewarmFTGreyStickyStrikes() {
 		}
 		_ = ensureFTGreyStrike(sz, true)
 	}
+	if ftGreyBoldTTF == nil {
+		return
+	}
+	for _, sz := range stickyStrikeSizes() {
+		if len(ftGreyBoldStrikes) >= ftGreyStrikeMax {
+			break
+		}
+		_ = ensureFTGreyBoldStrike(sz, true)
+	}
 }
 
 // ftGreySubpixelPhase picks a quarter-pixel ClearType X-bin (Skia-class).
@@ -714,7 +815,7 @@ func ensurePlainStickyStrike(sz int) *ftGreyStrike {
 	if s, ok := ftGreyPlainStrikes[sz]; ok {
 		return s
 	}
-	return bakeFTGreyStrike(sz, true, true)
+	return bakeFTGreyStrike(sz, true, true, false)
 }
 
 // ensureFTGreyStrike bakes at init/prewarm only. Draw/measure never call this for new sizes.
@@ -735,11 +836,66 @@ func ensureFTGreyStrike(sz int, sticky bool) *ftGreyStrike {
 			return nil
 		}
 	}
-	return bakeFTGreyStrike(sz, sticky, false)
+	return bakeFTGreyStrike(sz, sticky, false, false)
 }
 
-func bakeFTGreyStrike(sz int, sticky, plain bool) *ftGreyStrike {
-	face := truetype.NewFace(ftGreyTTF, &truetype.Options{
+func ensureFTGreyBoldStrike(sz int, sticky bool) *ftGreyStrike {
+	if !PreferFTGreyStrikes() || !ftGreyReady || ftGreyBoldTTF == nil {
+		return nil
+	}
+	if ftGreyBoldStrikes == nil {
+		ftGreyBoldStrikes = make(map[int]*ftGreyStrike)
+	}
+	if s, ok := ftGreyBoldStrikes[sz]; ok {
+		if sticky {
+			s.sticky = true
+		}
+		return s
+	}
+	if len(ftGreyBoldStrikes) >= ftGreyStrikeMax {
+		return nil
+	}
+	return bakeFTGreyStrike(sz, sticky, false, true)
+}
+
+func bakeFTGreyStrike(sz int, sticky, plain, bold bool) *ftGreyStrike {
+	ttf := ftGreyTTF
+	ttfData := ftGreyTTFData
+	fontPath := ""
+	if bold {
+		// Size-aware Poppins weight (Medium/SemiBold); Segoe stays Bold via default path.
+		boldPath := resolveFTGreyChromeBoldPathForSize(ftGreyRegularPath, sz)
+		if boldPath == "" {
+			return nil
+		}
+		if boldPath == ftGreyBoldPath && ftGreyBoldTTF != nil {
+			ttf = ftGreyBoldTTF
+			ttfData = ftGreyBoldTTFData
+			fontPath = ftGreyBoldPath
+		} else {
+			bdata, err := ReadAssetFile(boldPath)
+			if err != nil {
+				if ftGreyBoldTTF == nil {
+					return nil
+				}
+				ttf = ftGreyBoldTTF
+				ttfData = ftGreyBoldTTFData
+				fontPath = ftGreyBoldPath
+			} else if bttf, err2 := truetype.Parse(bdata); err2 != nil {
+				if ftGreyBoldTTF == nil {
+					return nil
+				}
+				ttf = ftGreyBoldTTF
+				ttfData = ftGreyBoldTTFData
+				fontPath = ftGreyBoldPath
+			} else {
+				ttf = bttf
+				ttfData = bdata
+				fontPath = boldPath
+			}
+		}
+	}
+	face := truetype.NewFace(ttf, &truetype.Options{
 		Size:              float64(sz),
 		DPI:               72,
 		// Vertical = FreeType LIGHT / Skia kSlight — Full causes stem-width jumps
@@ -750,6 +906,7 @@ func bakeFTGreyStrike(sz int, sticky, plain bool) *ftGreyStrike {
 	ascent := float32(face.Metrics().Ascent.Ceil())
 	useLCD := !plain && PreferFTLCDChrome()
 	fromDWrite := false
+	fromOutline := false
 	var (
 		atlas  *image.RGBA
 		glyphs map[rune]ftGreyGlyph
@@ -760,10 +917,10 @@ func bakeFTGreyStrike(sz int, sticky, plain bool) *ftGreyStrike {
 		// Prefer real DirectWrite ClearType (T1.14b); fall back to fake neighbor LCD.
 		// North star: 4-phase rem-body within 8-atlas WS budget.
 		origins := ftGreySubXOrigins(sz)
-		if atlas, glyphs, ok = packDWriteLCDStrikeAtlas(int32(sz), origins[0], "", false); ok {
+		if atlas, glyphs, ok = packDWriteLCDStrikeAtlas(int32(sz), origins[0], fontPath, false); ok {
 			fromDWrite = true
 			for _, ox := range origins[1:] {
-				a, g, okP := packDWriteLCDStrikeAtlas(int32(sz), ox, "", false)
+				a, g, okP := packDWriteLCDStrikeAtlas(int32(sz), ox, fontPath, false)
 				if !okP || a == nil || g == nil {
 					continue
 				}
@@ -780,7 +937,13 @@ func bakeFTGreyStrike(sz int, sticky, plain bool) *ftGreyStrike {
 		}
 	} else {
 		var ink int
-		atlas, glyphs, ink, ok = packFTGreyAtlas(face, int32(sz))
+		// Linux: outline AA (fx/gg) — Windows DWrite analogue. No gamma/fx boost.
+		if atlas, glyphs, ink, ok = packFTGreyAtlasOutline(ttfData, sz, 2); ok {
+			fromOutline = true
+			logFTGreyOutlineBake()
+		} else {
+			atlas, glyphs, ink, ok = packFTGreyAtlas(face, int32(sz))
+		}
 		_ = ink
 	}
 	_ = face.Close()
@@ -789,15 +952,20 @@ func bakeFTGreyStrike(sz int, sticky, plain bool) *ftGreyStrike {
 	}
 	if fromDWrite {
 		enhanceS1DWriteLCDAtlas(atlas)
-	} else {
-		enhanceS1StrikeAtlas(atlas, useLCD)
+	} else if useLCD {
+		enhanceS1StrikeAtlas(atlas, true)
 	}
+	// Greyscale: leave masks alone (no SkMaskGamma / BoostRGBAAlpha).
 	tex := GoImageToTexture(atlas)
 	if tex.ID == 0 {
 		return nil
 	}
-	// Exact 1:1 — point filter (bilinear softens stems at device px).
-	rl.SetTextureFilter(tex, rl.FilterPoint)
+	// LCD/DWrite + outline-AA grey: point. Legacy FT bitmap grey: bilinear.
+	if useLCD || fromDWrite || fromOutline {
+		rl.SetTextureFilter(tex, rl.FilterPoint)
+	} else {
+		rl.SetTextureFilter(tex, rl.FilterBilinear)
+	}
 	ascent = ftGreyAscentFromGlyphs(glyphs, ascent)
 	for i := range extraPhases {
 		ascent = ftGreyAscentFromGlyphs(extraPhases[i].glyphs, ascent)
@@ -816,6 +984,13 @@ func bakeFTGreyStrike(sz int, sticky, plain bool) *ftGreyStrike {
 			ftGreyPlainStrikes = make(map[int]*ftGreyStrike)
 		}
 		ftGreyPlainStrikes[sz] = s
+		return s
+	}
+	if bold {
+		if ftGreyBoldStrikes == nil {
+			ftGreyBoldStrikes = make(map[int]*ftGreyStrike)
+		}
+		ftGreyBoldStrikes[sz] = s
 		return s
 	}
 	ftGreyStrikes[sz] = s
@@ -862,6 +1037,20 @@ func unloadFTGreyFont() {
 		}
 	}
 	ftGreyStrikes = nil
+	for _, s := range ftGreyBoldStrikes {
+		if s == nil {
+			continue
+		}
+		if s.tex.ID != 0 {
+			rl.UnloadTexture(s.tex)
+		}
+		for i := range s.phases {
+			if s.phases[i].tex.ID != 0 {
+				rl.UnloadTexture(s.phases[i].tex)
+			}
+		}
+	}
+	ftGreyBoldStrikes = nil
 	for _, s := range ftGreyPlainStrikes {
 		if s != nil && s.tex.ID != 0 {
 			rl.UnloadTexture(s.tex)
@@ -871,6 +1060,10 @@ func unloadFTGreyFont() {
 	ftGreyStrikeLRU = nil
 	ftGreyTTFData = nil
 	ftGreyTTF = nil
+	ftGreyBoldTTFData = nil
+	ftGreyBoldTTF = nil
+	ftGreyBoldPath = ""
+	ftGreyRegularPath = ""
 	ftGreyGlyphs = nil
 	ftGreyReady = false
 	ftGreyBasePx = 0
@@ -907,16 +1100,16 @@ func ftGreyPick(fontSize float32) (glyphs map[rune]ftGreyGlyph, tex rl.Texture2D
 }
 
 // ftGreyResolveScale returns the draw/measure scale for a picked atlas.
-// LCD ClearType strikes always render 1:1 — stretching (32→30, 48→50) causes
-// the "shaky" stem weight users see vs browser greyscale AA.
+// Sticky strikes (LCD and greyscale) always render 1:1 — stretching
+// (16→16.8 FontDensity, 32→30) with FilterPoint looks wavy/jagged.
 func ftGreyResolveScale(fontSize, basePx float32, exact, lcd bool) float32 {
 	if !exact {
 		return ftGreyScale(fontSize, basePx)
 	}
-	if lcd {
-		return 1
-	}
-	return ftGreyStrikeScale(fontSize, basePx)
+	_ = lcd
+	_ = fontSize
+	_ = basePx
+	return 1
 }
 
 // ftGreyPickNearestStrike finds sticky strike with scale closest to 1 within
@@ -970,6 +1163,15 @@ func ftGreyPickNearestStrikeFiltered(fontSize float32, greyOnly bool) (*ftGreySt
 
 // ftGreyPickForDraw selects glyphs for draw/measure; transparent hosts skip LCD atlases.
 func ftGreyPickForDraw(fontSize float32) (glyphs map[rune]ftGreyGlyph, tex rl.Texture2D, basePx, ascent float32, exact, lcd bool) {
+	return ftGreyPickForDrawWeight(fontSize, false)
+}
+
+func ftGreyPickForDrawWeight(fontSize float32, bold bool) (glyphs map[rune]ftGreyGlyph, tex rl.Texture2D, basePx, ascent float32, exact, lcd bool) {
+	if bold && PreferFTGreyStrikes() && len(ftGreyBoldStrikes) > 0 {
+		if s, ok := ftGreyPickNearestFrom(ftGreyBoldStrikes, fontSize, textSkipLCD > 0); ok {
+			return s.glyphs, s.tex, s.basePx, s.ascent, true, s.lcd && textSkipLCD == 0
+		}
+	}
 	if textSkipLCD > 0 {
 		if PreferFTGreyStrikes() && ftGreyStrikes != nil {
 			if s, ok := ftGreyPickNearestGreyStrike(fontSize); ok {
@@ -982,15 +1184,62 @@ func ftGreyPickForDraw(fontSize float32) (glyphs map[rune]ftGreyGlyph, tex rl.Te
 	return ftGreyPick(fontSize)
 }
 
+// ftGreyPickNearestFrom finds the closest sticky strike in strikes within the scale band.
+func ftGreyPickNearestFrom(strikes map[int]*ftGreyStrike, fontSize float32, greyOnly bool) (*ftGreyStrike, bool) {
+	if strikes == nil || len(strikes) == 0 || fontSize < 1 {
+		return nil, false
+	}
+	var best *ftGreyStrike
+	bestDist := float32(1e9)
+	for _, s := range strikes {
+		if s == nil || s.basePx < 1 {
+			continue
+		}
+		if greyOnly && s.lcd {
+			continue
+		}
+		scale := ftGreyStrikeScale(fontSize, s.basePx)
+		if scale < ftGreyStrikeScaleMin || scale > ftGreyStrikeScaleMax {
+			continue
+		}
+		dist := absFloat32(scale - 1)
+		if dist < bestDist {
+			bestDist = dist
+			best = s
+		}
+	}
+	if best == nil {
+		return nil, false
+	}
+	return best, true
+}
+
 func measureTextFTGrey(text string, fontSize float32) float32 {
+	return measureTextFTGreyWeight(text, fontSize, false)
+}
+
+func measureTextFTGreyBold(text string, fontSize float32) float32 {
+	return measureTextFTGreyWeight(text, fontSize, true)
+}
+
+func measureTextFTGreyWeight(text string, fontSize float32, bold bool) float32 {
 	if !ftGreyReady {
 		return 0
 	}
-	glyphs, _, basePx, _, exact, lcd := ftGreyPickForDraw(fontSize)
+	glyphs, _, basePx, _, exact, lcd := ftGreyPickForDrawWeight(fontSize, bold)
 	if basePx <= 0 || glyphs == nil {
 		return 0
 	}
 	scale := ftGreyResolveScale(fontSize, basePx, exact, lcd)
+	if exact {
+		if advs, ok := ftGreyKernAdvances(text, fontSize, bold, false, false); ok {
+			var w float32
+			for _, a := range advs {
+				w += a * scale
+			}
+			return w
+		}
+	}
 	var w float32
 	n := 0
 	for _, r := range text {
@@ -1014,26 +1263,45 @@ func measureTextFTGrey(text string, fontSize float32) float32 {
 	return w
 }
 
+// snapPresentPx snaps sticky glyph coords to the layout pixel grid (layout==FB).
+func snapPresentPx(v float32) float32 {
+	return float32(math.Round(float64(v)))
+}
+
+func drawTextFTGreyBold(text string, x, y, fontSize float32, color rl.Color) {
+	drawTextFTGreyWeight(text, x, y, fontSize, color, true)
+}
+
 func drawTextFTGrey(text string, x, y, fontSize float32, color rl.Color) {
+	drawTextFTGreyWeight(text, x, y, fontSize, color, false)
+}
+
+func drawTextFTGreyWeight(text string, x, y, fontSize float32, color rl.Color, bold bool) {
 	if !ftGreyReady {
 		return
 	}
-	glyphs, tex, basePx, ascentPx, exact, lcd := ftGreyPickForDraw(fontSize)
+	glyphs, tex, basePx, ascentPx, exact, lcd := ftGreyPickForDrawWeight(fontSize, bold)
 	if basePx <= 0 || tex.ID == 0 || glyphs == nil {
 		return
 	}
 	scale := ftGreyResolveScale(fontSize, basePx, exact, lcd)
 	ascent := ascentPx * scale
-	// Skia-style: snap baseline Y. Fractional penX only when 4-phase atlases exist;
-	// ph=1 + fractional X is the small-caption "shaky" ClearType look.
+	// Snap baseline + start pen once. Greyscale FilterPoint uses integer outline
+	// advances/bearings and integer kern advances (FontSpacing folded in). Do NOT
+	// snap pen+bearing or re-snap pen each glyph — that caused pair gaps
+	// ("Close", "thin", "That") and discarded fractional tracking. No dstY snap.
 	baseline := y + ascent
 	penX := x
 	if exact {
-		baseline = float32(math.Round(float64(baseline)))
+		baseline = snapPresentPx(baseline)
 	}
 	var strike *ftGreyStrike
 	if exact && PreferFTGreyStrikes() {
-		if textSkipLCD > 0 {
+		if bold {
+			if s, ok := ftGreyPickNearestFrom(ftGreyBoldStrikes, fontSize, textSkipLCD > 0); ok {
+				strike = s
+			}
+		} else if textSkipLCD > 0 {
 			if s, ok := ftGreyPickNearestGreyStrike(fontSize); ok {
 				strike = s
 			}
@@ -1042,10 +1310,15 @@ func drawTextFTGrey(text string, x, y, fontSize float32, color rl.Color) {
 		}
 	}
 	hasPhases := strike != nil && len(strike.phases) > 0 && textSkipLCD == 0
-	if exact && lcd && !hasPhases {
+	if exact && (!lcd || !hasPhases) {
 		penX = float32(math.Round(float64(penX)))
 	}
 	useLCD := lcd && exact && ftLCDShader.ID != 0
+	var kernAdvs []float32
+	kernOK := false
+	if exact && !useLCD {
+		kernAdvs, kernOK = ftGreyKernAdvances(text, fontSize, bold, false, false)
+	}
 	if useLCD {
 		bg := lcdBgForText(color)
 		rl.BeginShaderMode(ftLCDShader)
@@ -1053,6 +1326,11 @@ func drawTextFTGrey(text string, x, y, fontSize float32, color rl.Color) {
 			rl.SetShaderValue(ftLCDShader, ftLCDBgLoc, []float32{bg.X, bg.Y, bg.Z}, rl.ShaderUniformVec3)
 		}
 		bindFTLCDBlendParamsForSize(basePx, 1)
+	}
+	runeI := 0
+	nRunes := 0
+	for range text {
+		nRunes++
 	}
 	for _, r := range text {
 		gMap, gTex := glyphs, tex
@@ -1067,43 +1345,45 @@ func drawTextFTGrey(text string, x, y, fontSize float32, color rl.Color) {
 		g, ok := gMap[r]
 		if !ok {
 			// Advances from primary phase (identical Face metrics).
-			if sp, ok := glyphs[' ']; ok {
+			if kernOK && runeI < len(kernAdvs) {
+				penX += kernAdvs[runeI] * scale
+			} else if sp, ok := glyphs[' ']; ok {
 				penX += sp.advance * scale
 			} else if exact {
 				penX += basePx * 0.5
 			} else {
 				penX += fontSize * 0.5 * ftGreyOpticalScale
 			}
+			if !kernOK && FontSpacing != 0 && runeI < nRunes-1 {
+				penX += float32(math.Round(float64(FontSpacing)))
+			}
+			runeI++
 			continue
 		}
 		if g.hasInk && g.src.Width > 0 && g.src.Height > 0 {
 			dstX := penX + g.bearingX*scale
 			dstY := baseline + g.bearingY*scale
-			if exact {
-				dstY = float32(math.Round(float64(dstY)))
-			}
-			// Phase atlases assume integer device X; fractional sampling with
-			// FilterPoint makes stems uneven. Pen stays fractional for phase pick.
-			if exact && lcd {
-				dstX = float32(math.Floor(float64(dstX)))
-			}
-			dst := rl.NewRectangle(
-				dstX,
-				dstY,
-				g.src.Width*scale,
-				g.src.Height*scale,
-			)
+			dstW := g.src.Width * scale
+			dstH := g.src.Height * scale
+			dst := rl.NewRectangle(dstX, dstY, dstW, dstH)
 			rl.DrawTexturePro(gTex, g.src, dst, rl.NewVector2(0, 0), 0, color)
 		}
-		// Advance from primary glyphs so measure/draw stay RichText-safe.
-		if pg, ok := glyphs[r]; ok {
-			penX += pg.advance * scale
+		if kernOK && runeI < len(kernAdvs) {
+			penX += kernAdvs[runeI] * scale
+		} else if pg, ok := glyphs[r]; ok {
+			adv := pg.advance * scale
+			if FontSpacing != 0 && runeI < nRunes-1 {
+				adv = float32(math.Round(float64(adv + FontSpacing)))
+			}
+			penX += adv
 		} else {
-			penX += g.advance * scale
+			adv := g.advance * scale
+			if FontSpacing != 0 && runeI < nRunes-1 {
+				adv = float32(math.Round(float64(adv + FontSpacing)))
+			}
+			penX += adv
 		}
-		if FontSpacing != 0 {
-			penX += FontSpacing
-		}
+		runeI++
 	}
 	if useLCD {
 		rl.EndShaderMode()
@@ -1134,7 +1414,7 @@ func ftGreyInkHeightKind(fontSize float32, kind ftFaceKind, bold bool) float32 {
 	if !ftGreyReady {
 		return fontSize
 	}
-	_, _, basePx, ascentPx, exact, lcd := ftGreyPick(fontSize)
+	_, _, basePx, ascentPx, exact, lcd := ftGreyPickForDrawWeight(fontSize, bold)
 	if basePx <= 0 {
 		return fontSize * ftGreyOpticalScale
 	}
@@ -1155,7 +1435,7 @@ func ftGreyLineBoxHeightKind(fontSize float32, kind ftFaceKind, bold bool) float
 		if !ftGreyReady {
 			return fontSize
 		}
-		glyphs, _, basePx, ascentPx, exact, lcd := ftGreyPick(fontSize)
+		glyphs, _, basePx, ascentPx, exact, lcd := ftGreyPickForDrawWeight(fontSize, bold)
 		if basePx <= 0 {
 			return fontSize
 		}

@@ -178,10 +178,16 @@ func beginFillClientChromeResize(edge resizeEdge, screenMX, screenMY float32) {
 		if fillClientResize.startWH < 1 {
 			fillClientResize.startWH = int32(rl.GetScreenHeight())
 		}
-	} else {
+	} else if WindowPositionSupported() {
 		pos := rl.GetWindowPosition()
 		fillClientResize.startWX = int32(pos.X)
 		fillClientResize.startWY = int32(pos.Y)
+		fillClientResize.startWW = int32(rl.GetScreenWidth())
+		fillClientResize.startWH = int32(rl.GetScreenHeight())
+	} else {
+		// Wayland: no global position — size-only resize (origin edges via TitleBar/xdg).
+		fillClientResize.startWX = 0
+		fillClientResize.startWY = 0
 		fillClientResize.startWW = int32(rl.GetScreenWidth())
 		fillClientResize.startWH = int32(rl.GetScreenHeight())
 	}
@@ -286,7 +292,7 @@ func moveFillClientChromeResize(screenMX, screenMY float32) {
 		return
 	}
 
-	if x != int(startWX) || y != int(startWY) {
+	if (x != int(startWX) || y != int(startWY)) && WindowPositionSupported() {
 		if tb != nil {
 			tb.moveWindow(x, y)
 		} else {

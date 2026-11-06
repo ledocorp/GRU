@@ -341,8 +341,9 @@ func phosphorFontDrawSize(dst rl.Rectangle) float32 {
 }
 
 // PreferIconSharp1x enables G1.3 sticky icon sizes + point-filtered atlas at SSAA 1×.
+// Uses the quality tier (BaseSupersamplingScale), not Wayland presentZoom.
 func PreferIconSharp1x() bool {
-	return EffectiveSupersamplingScale() <= 1.01
+	return BaseSupersamplingScale <= 1.01
 }
 
 // stickyIconDrawSizes are exact client-px glyph sizes for Remix draws at SSAA 1×.

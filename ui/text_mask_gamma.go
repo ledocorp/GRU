@@ -154,8 +154,9 @@ func enhanceS1StrikeAtlas(atlas *image.RGBA, lcd bool) {
 		applyMaskGammaLUTRGB(atlas, table)
 	} else {
 		applyMaskGammaLUTAlpha(atlas, table)
-		// fx dual-path: additional Skia-lite contrast boost when -tags gru_fx (optional polish).
-		tryFxBoostStrikeAlpha(atlas.Pix, contrast*0.35)
+		// Do NOT tryFxBoostStrikeAlpha here — BoostRGBAAlpha punches white
+		// speckles into greyscale sticky. Windows ClearType uses
+		// enhanceS1DWriteLCDAtlas and never hits this path.
 	}
 }
 

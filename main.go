@@ -60,22 +60,17 @@ func readClientSizeClamped() (w, h int32) {
 	}
 	const maxAttempts = 6
 	for attempt := 0; attempt < maxAttempts; attempt++ {
-		w = int32(rl.GetScreenWidth())
-		h = int32(rl.GetScreenHeight())
-		if w < 1 || h < 1 {
-			return w, h
+		sw := int32(rl.GetScreenWidth())
+		sh := int32(rl.GetScreenHeight())
+		if sw < 1 || sh < 1 {
+			return sw, sh
 		}
-		if w >= ui.MinClientWidth {
-			return w, h
+		if sw >= ui.MinClientWidth {
+			return ui.ClientLayoutSize()
 		}
-		rl.SetWindowSize(int(ui.MinClientWidth), int(h))
+		rl.SetWindowSize(int(ui.MinClientWidth), int(sh))
 	}
-	w = int32(rl.GetScreenWidth())
-	h = int32(rl.GetScreenHeight())
-	if w < ui.MinClientWidth {
-		w = ui.MinClientWidth
-	}
-	return w, h
+	return ui.ClientLayoutSize()
 }
 
 const (
@@ -353,9 +348,12 @@ func runApp() {
 	// messages from raylib are also filtered. Change to LogAll while debugging.
 	rl.SetTraceLogLevel(rl.LogWarning)
 
+	ui.PrepareLinuxWindowHints()
+	ui.PrepareLinuxAppID("gru-studio")
+
 	// ── Window quality flags ────────────────────────────────────────────────
 	// Must be set before InitWindow.
-	//   FlagMsaa4xHint     — ask the GPU for 4× MSAA on the default framebuffer
+	//   FlagMsaa4xHint     — Windows only (Linux omits — softens 1× Wayland present)
 	//   FlagVsyncHint      — enable VSync (smooth tearing-free rendering)
 	//   FlagWindowResizable  — allow the window to be resized (OS chrome when decorated,
 	//                           custom edge grips when borderless)
@@ -366,6 +364,7 @@ func runApp() {
 
 	initW, initH := appInitWindowSize()
 	rl.InitWindow(initW, initH, appInitWindowTitle())
+	ui.ReinforceLinuxAppID()
 	appinstance.RaiseRunningInstance = platformWindowFocus
 	// Seed windowW/H from the real client immediately — do not keep init constants
 	// through rem/atlas/scene Build (desktop previously synced only on first frame).

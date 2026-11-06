@@ -203,13 +203,22 @@ func rasterShapedGlyph(face *font.Face, gid font.GID, fontSize, rasterPx float32
 }
 
 func shapedGlyphRasterLayout(outline font.GlyphOutline, ext font.GlyphExtents, sizePx float32, upem uint16) (scale float64, w, h int, ox, oy float64) {
+	return shapedGlyphRasterLayoutPad(outline, ext, sizePx, upem, 3.0)
+}
+
+// shapedGlyphRasterLayoutPad is [shapedGlyphRasterLayout] with an explicit
+// coverage pad in raster pixels. Sticky outline SSAA bake must pass pad≈3×ssaa
+// so 1× downsample still keeps ~3px AA fringe (pad=3 at 4× collapses to <1px).
+func shapedGlyphRasterLayoutPad(outline font.GlyphOutline, ext font.GlyphExtents, sizePx float32, upem uint16, pad float64) (scale float64, w, h int, ox, oy float64) {
 	scale = float64(sizePx) / float64(upem)
 	minX, minY, maxX, maxY := shapedOutlineBounds(outline)
 	if minX > maxX {
 		minX, maxX = float64(ext.XBearing), float64(ext.XBearing+ext.Width)
 		minY, maxY = float64(ext.YBearing-ext.Height), float64(ext.YBearing)
 	}
-	const pad = 3.0
+	if pad < 1 {
+		pad = 1
+	}
 	w = int(math.Ceil((maxX-minX)*scale)) + int(pad*2)
 	h = int(math.Ceil((maxY-minY)*scale)) + int(pad*2)
 	if w < 4 {

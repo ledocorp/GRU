@@ -18,7 +18,16 @@ Optional environment variables can raise the framebuffer scale (1.5× or 2×) fo
 
 Widget authors draw Raylib primitives but should use Gru text helpers (`DrawText` / measure / effective font size) — not raw Raylib text APIs — so scale stays consistent.
 
-At 1×, quality comes from MSAA, LCD blending on opaque surfaces, coverage-aware strokes, and glyph raster — not from bilinear downscaling a 2× framebuffer.
+At 1×, quality comes from MSAA (Windows), LCD / outline coverage, coverage-aware strokes, and glyph raster — not from bilinear downscaling a 2× framebuffer.
+
+### Platform sticky Latin text
+
+| Host | Sticky bake | Notes |
+|------|-------------|--------|
+| Windows | DirectWrite ClearType | LCD shader; `FilterPoint` |
+| Linux | Outline → fx 4× AA (gg fallback) | Greyscale sticky; `FilterPoint`; no gamma/`BoostRGBAAlpha` |
+
+Full decision log (scale → FT holes → outline AA → soft-bold → kern/snap → baseline lock; Windows bold PR checklist): [linux-s1-text.md](linux-s1-text.md). Linux present 1:1: [`LINUX_S1_RETARGET_REVIEW.md`](../../LINUX_S1_RETARGET_REVIEW.md).
 
 ---
 
@@ -123,4 +132,4 @@ See [../widgets/overlays.md](../widgets/overlays.md).
 - `cmd/hello` — `InitSupersampling` + cache loop  
 - grudemo: **Batch 1 · Tooltip / TabView / Modal**, **Batch 7 · Toast / Notification**, **Counter Demo**, **Theme v2 Foundation**  
 
-Next: [webview.md](webview.md) · [overview.md](overview.md)
+Next: [linux-s1-text.md](linux-s1-text.md) · [webview.md](webview.md) · [overview.md](overview.md)

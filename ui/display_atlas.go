@@ -19,9 +19,10 @@ const (
 	FTGreyAtlasBasePx int32 = 48
 )
 
-var atlasForDisplayScale float32
+var atlasForGlyphScale float32
 
-// EffectiveGlyphDisplayScale is DisplayScale clamped for glyph raster strike keys.
+// EffectiveGlyphDisplayScale is DisplayScale clamped for glyph raster / T1.9.
+// Linux keeps DisplayScale=1 (no compositor densify).
 func EffectiveGlyphDisplayScale() float32 {
 	s := DisplayScale
 	if s < 1 {
@@ -66,7 +67,7 @@ func EffectiveFTGreyAtlasSize() int32 { return scaleAtlasPx(FTGreyAtlasBasePx) }
 func InitDisplayAwareAtlases() {
 	ApplyRenderQualityFromEnv()
 	RefreshDisplayScale()
-	atlasForDisplayScale = DisplayScale
+	atlasForGlyphScale = EffectiveGlyphDisplayScale()
 	InitIcons(EffectiveRemixAtlasSize())
 	if LoadedUIFontPath == "" {
 		LoadedUIFontPath = firstExisting(resolvedFontCandidates()...)
@@ -138,16 +139,17 @@ func reinitDisplayAwareAtlases() {
 	}
 }
 
-// ReinitDisplayAwareAtlasesIfNeeded rebuilds text/icon atlases when [DisplayScale] changes
-// (e.g. window moved to another monitor). Returns true when atlases were reloaded.
+// ReinitDisplayAwareAtlasesIfNeeded rebuilds text/icon atlases when DisplayScale
+// changes (e.g. window moved to another monitor). Returns true when reloaded.
 func ReinitDisplayAwareAtlasesIfNeeded() bool {
-	prev := atlasForDisplayScale
 	RefreshDisplayScale()
-	if prev > 0 && displayScaleNearlyEqual(DisplayScale, prev) {
+	next := EffectiveGlyphDisplayScale()
+	prev := atlasForGlyphScale
+	if prev > 0 && displayScaleNearlyEqual(next, prev) {
 		return false
 	}
 	reinitDisplayAwareAtlases()
-	atlasForDisplayScale = DisplayScale
+	atlasForGlyphScale = next
 	return true
 }
 

@@ -88,7 +88,8 @@ func resolveFTGreyAuxPath(kind ftFaceKind) string {
 				return p
 			}
 		}
-		return ""
+		// Tree ships variable Inter only (no static optical cuts).
+		return firstExisting(interVariableCandidates()...)
 	default:
 		return ""
 	}
@@ -111,7 +112,8 @@ func resolveFTGreyAuxBoldPath(kind ftFaceKind) string {
 			return p
 		}
 	}
-	return ""
+	// Variable Inter: same file for bold (weight axis); better than (none).
+	return firstExisting(interVariableCandidates()...)
 }
 
 // InitFTGreyAuxFaces loads Fira (Mono) + Inter (PreviewFont) onto the same S1
@@ -281,6 +283,22 @@ func unloadAuxStrike(s *ftGreyStrike) {
 	}
 }
 
+// auxTTFData returns the TTF bytes for outline sticky bake (path may be an Inter cut).
+func (fam *ftGreyAuxFamily) auxTTFData(path string, bold bool) []byte {
+	if fam == nil {
+		return nil
+	}
+	if path != "" && fam.extraData != nil {
+		if d := fam.extraData[path]; len(d) > 0 {
+			return d
+		}
+	}
+	if bold && len(fam.boldData) > 0 {
+		return fam.boldData
+	}
+	return fam.ttfData
+}
+
 func (fam *ftGreyAuxFamily) ttfAt(path string) (*truetype.Font, string) {
 	if fam == nil || path == "" {
 		return nil, ""
@@ -366,6 +384,7 @@ func bakeFTGreyAuxStrike(fam *ftGreyAuxFamily, sz int, sticky, bold bool) *ftGre
 	})
 	ascent := float32(face.Metrics().Ascent.Ceil())
 	fromDWrite := false
+	fromOutline := false
 	var (
 		atlas  *image.RGBA
 		glyphs map[rune]ftGreyGlyph
@@ -386,12 +405,28 @@ func bakeFTGreyAuxStrike(fam *ftGreyAuxFamily, sz int, sticky, bold bool) *ftGre
 			fromDWrite = true
 		} else {
 			var ink int
-			atlas, glyphs, ink, ok = packFTGreyAuxAtlas(face, int32(sz))
+			data := fam.auxTTFData(fontPath, bold)
+			vars := outlineVarsForAuxPath(fontPath, bold, sz)
+			if atlas, glyphs, ink, ok = packFTGreyAtlasOutlineVars(data, sz, 4, vars); ok {
+				fromOutline = true
+				logFTGreyOutlineBake()
+				logInterVFBoldOnce(fontPath, bold, sz, vars)
+			} else {
+				atlas, glyphs, ink, ok = packFTGreyAuxAtlas(face, int32(sz))
+			}
 			_ = ink
 		}
 	} else {
 		var ink int
-		atlas, glyphs, ink, ok = packFTGreyAuxAtlas(face, int32(sz))
+		data := fam.auxTTFData(fontPath, bold)
+		vars := outlineVarsForAuxPath(fontPath, bold, sz)
+		if atlas, glyphs, ink, ok = packFTGreyAtlasOutlineVars(data, sz, 4, vars); ok {
+			fromOutline = true
+			logFTGreyOutlineBake()
+			logInterVFBoldOnce(fontPath, bold, sz, vars)
+		} else {
+			atlas, glyphs, ink, ok = packFTGreyAuxAtlas(face, int32(sz))
+		}
 		_ = ink
 	}
 	_ = face.Close()
@@ -403,13 +438,17 @@ func bakeFTGreyAuxStrike(fam *ftGreyAuxFamily, sz int, sticky, bold bool) *ftGre
 	} else if useLCD {
 		enhanceS1StrikeAtlas(atlas, true)
 	}
-	// DWrite greyscale + FreeType greyscale: leave masks alone (no gamma/fx).
+	// Greyscale: leave masks alone (no gamma/fx boost).
 	tex := GoImageToTexture(atlas)
 	if tex.ID == 0 {
 		return nil
 	}
-	rl.SetTextureFilter(tex, rl.FilterPoint)
-	// Exact sticky strikes stay point-filtered (bilinear softens 1:1 → muddy/bold).
+	// LCD / outline-AA: point. Legacy FT bitmap grey: bilinear.
+	if useLCD || fromOutline {
+		rl.SetTextureFilter(tex, rl.FilterPoint)
+	} else {
+		rl.SetTextureFilter(tex, rl.FilterBilinear)
+	}
 	ascent = ftGreyAscentFromGlyphs(glyphs, ascent)
 	s := &ftGreyStrike{
 		basePx: float32(sz),
@@ -469,6 +508,9 @@ func unloadFTGreyAuxFaces() {
 
 func measureTextFTGreyKind(text string, fontSize float32, kind ftFaceKind, bold bool) float32 {
 	if kind == ftFaceChrome {
+		if bold {
+			return measureTextFTGreyBold(text, fontSize)
+		}
 		return measureTextFTGrey(text, fontSize)
 	}
 	fam := ftAuxFamily(kind)
@@ -477,6 +519,16 @@ func measureTextFTGreyKind(text string, fontSize float32, kind ftFaceKind, bold 
 		return 0
 	}
 	scale := ftGreyResolveScale(fontSize, basePx, exact, lcd)
+	if exact {
+		mono, preview := kind == ftFaceMono, kind == ftFacePreview
+		if advs, ok := ftGreyKernAdvances(text, fontSize, bold, mono, preview); ok {
+			var w float32
+			for _, a := range advs {
+				w += a * scale
+			}
+			return w
+		}
+	}
 	var w float32
 	n := 0
 	for _, r := range text {
@@ -502,6 +554,10 @@ func measureTextFTGreyKind(text string, fontSize float32, kind ftFaceKind, bold 
 
 func drawTextFTGreyKind(text string, x, y, fontSize float32, color rl.Color, kind ftFaceKind, bold bool) {
 	if kind == ftFaceChrome {
+		if bold {
+			drawTextFTGreyBold(text, x, y, fontSize, color)
+			return
+		}
 		drawTextFTGrey(text, x, y, fontSize, color)
 		return
 	}
@@ -515,9 +571,15 @@ func drawTextFTGreyKind(text string, x, y, fontSize float32, color rl.Color, kin
 	baseline := y + ascent
 	penX := x
 	useLCD := lcd && exact && ftLCDShader.ID != 0
-	if exact && useLCD {
-		baseline = float32(math.Round(float64(baseline)))
-		penX = float32(math.Round(float64(penX)))
+	if exact {
+		baseline = snapPresentPx(baseline)
+		penX = snapPresentPx(penX)
+	}
+	mono, preview := kind == ftFaceMono, kind == ftFacePreview
+	var kernAdvs []float32
+	kernOK := false
+	if exact && !useLCD {
+		kernAdvs, kernOK = ftGreyKernAdvances(text, fontSize, bold, mono, preview)
 	}
 	if useLCD {
 		bg := lcdBgForText(color)
@@ -527,36 +589,47 @@ func drawTextFTGreyKind(text string, x, y, fontSize float32, color rl.Color, kin
 		}
 		bindFTLCDBlendParamsForSizeOpt(basePx, 1, PreferAuxFaceLCDSoft(), false, false, false)
 	}
-	for i, r := range text {
+	runeI := 0
+	nRunes := 0
+	for range text {
+		nRunes++
+	}
+	for _, r := range text {
 		g, ok := glyphs[r]
 		if !ok {
-			if sp, ok := glyphs[' ']; ok {
+			if kernOK && runeI < len(kernAdvs) {
+				penX += kernAdvs[runeI] * scale
+			} else if sp, ok := glyphs[' ']; ok {
 				penX += sp.advance * scale
 			} else if exact {
 				penX += basePx * 0.5
 			} else {
 				penX += fontSize * 0.5 * ftGreyOpticalScale
 			}
-			if FontSpacing != 0 && i < len(text)-1 {
-				penX += FontSpacing
+			if !kernOK && FontSpacing != 0 && runeI < nRunes-1 {
+				penX += float32(math.Round(float64(FontSpacing)))
 			}
+			runeI++
 			continue
 		}
 		if g.hasInk && g.src.Width > 0 && g.src.Height > 0 {
 			dstX := penX + g.bearingX*scale
 			dstY := baseline + g.bearingY*scale
-			// Greyscale: do not Round dstY — that clips a 1px row off ascenders.
-			if exact && useLCD {
-				dstY = float32(math.Round(float64(dstY)))
-				dstX = float32(math.Floor(float64(dstX)))
-			}
-			dst := rl.NewRectangle(dstX, dstY, g.src.Width*scale, g.src.Height*scale)
+			dstW := g.src.Width * scale
+			dstH := g.src.Height * scale
+			dst := rl.NewRectangle(dstX, dstY, dstW, dstH)
 			rl.DrawTexturePro(tex, g.src, dst, rl.NewVector2(0, 0), 0, color)
 		}
-		penX += g.advance * scale
-		if FontSpacing != 0 && i < len(text)-1 {
-			penX += FontSpacing
+		if kernOK && runeI < len(kernAdvs) {
+			penX += kernAdvs[runeI] * scale
+		} else {
+			adv := g.advance * scale
+			if FontSpacing != 0 && runeI < nRunes-1 {
+				adv = float32(math.Round(float64(adv + FontSpacing)))
+			}
+			penX += adv
 		}
+		runeI++
 	}
 	if useLCD {
 		rl.EndShaderMode()
