@@ -13,6 +13,18 @@ go run -tags grudemo .
 go run -tags "grudemo,webview2" .
 ```
 
+### Android (NativeActivity)
+
+Branch / status: [ANDROID_PHASE.md](ANDROID_PHASE.md) (**M2 App Shell signed off**) · code map: [ANDROID_CODE.md](ANDROID_CODE.md) · packaging: [`packaging/android/`](../packaging/android/README.md).
+
+```bash
+# NDK r26.x — produces packaging/android/hello/libs/arm64-v8a/libhello.so
+./scripts/android/build-hello.sh
+./scripts/android/build-grudemo.sh   # libgrudemo.so (parks resource.syso during link)
+```
+
+APK wrap needs Android SDK + JDK (`gradlew :hello:assembleDebug`). FX guest/caps work is post-M2 — [ANDROID_FX.md](ANDROID_FX.md).
+
 Produce a binary with the CLI:
 
 ```bash

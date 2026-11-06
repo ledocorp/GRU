@@ -1,13 +1,27 @@
 //go:build android
 
-// Android-only OpenBrowser stub. Desktop: openurl_windows.go / openurl_other.go.
-// See docs/ANDROID_CODE.md §3.
+// Android OpenBrowser via Activity.openGruUrl → ACTION_VIEW.
+// C implementation: gruOpenBrowser in ime_android_jni.go. See docs/ANDROID_CODE.md.
 package ui
 
-import "errors"
+/*
+#include <stdlib.h>
+void gruOpenBrowser(const char *url);
+*/
+import "C"
 
-// OpenBrowser is not wired on Android v1 (no xdg-open). Preview links are no-op.
+import (
+	"errors"
+	"unsafe"
+)
+
+// OpenBrowser opens url in an external browser (or Custom Tabs handler) via ACTION_VIEW.
 func OpenBrowser(url string) error {
-	_ = url
-	return errors.New("OpenBrowser unavailable on Android")
+	if url == "" {
+		return errors.New("empty url")
+	}
+	c := C.CString(url)
+	defer C.free(unsafe.Pointer(c))
+	C.gruOpenBrowser(c)
+	return nil
 }

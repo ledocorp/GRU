@@ -191,7 +191,8 @@ func (r *IconRegistry) EnsureLoaded(name string, weight IconWeight) bool {
 	return remixEnsureGlyph(name, weight)
 }
 
-// EnsureLoadedMany packs all listed glyphs in one atlas rebuild.
+// EnsureLoadedMany warms many Remix glyphs in a single atlas rebuild.
+// Prefer this over N× EnsureLoaded when preloading a chrome icon set.
 func (r *IconRegistry) EnsureLoadedMany(names []string, weight IconWeight) bool {
 	if len(names) == 0 {
 		return true
@@ -348,6 +349,18 @@ func phosphorTextFallback(name string) string {
 		return "✓"
 	case IconMinus:
 		return "−"
+	case IconPlus:
+		return "+"
+	case IconHouse:
+		return "⌂"
+	case IconMagnifyingGlass:
+		return "⌕"
+	case IconUser, IconUsers:
+		return "☺" // BMP; emoji often missing from Android bitmap atlas
+	case IconList:
+		return "☰"
+	case IconDotsThree, IconDotsThreeVertical:
+		return "⋮"
 	default:
 		return ""
 	}

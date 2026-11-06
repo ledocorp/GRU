@@ -187,18 +187,29 @@ func (ti *TextInput) Update(dt float32) {
 			}
 		}
 
-		// Handle character input
-		char := rl.GetCharPressed()
+		if IMEKeyPressed(int32(rl.KeyBackspace)) {
+			if ti.hasSelection() {
+				ti.deleteSelection()
+			} else if ti.cursor > 0 {
+				text := ti.Text.Get()
+				ti.Text.Set(text[:ti.cursor-1] + text[ti.cursor:])
+				ti.cursor--
+				ti.updateScroll()
+				ti.MarkDrawDirty()
+			}
+		}
+		// Handle character input (raylib + Android IME proxy queue).
+		char := CharPressedOrIME()
 		for char != 0 {
 			if ti.hasSelection() {
 				ti.deleteSelection()
 			}
 			text := ti.Text.Get()
-			ti.Text.Set(text[:ti.cursor] + string(char) + text[ti.cursor:])
+			ti.Text.Set(text[:ti.cursor] + string(rune(char)) + text[ti.cursor:])
 			ti.cursor++
 			ti.updateScroll()
 			ti.MarkDrawDirty()
-			char = rl.GetCharPressed()
+			char = CharPressedOrIME()
 		}
 	}
 
@@ -353,7 +364,7 @@ func (ti *TextInput) AnimationActive() bool {
 	if ti.IsHidden() || ti.Disabled || !ti.keyboardActive() {
 		return false
 	}
-	if !rl.IsWindowFocused() {
+	if !PlatformWindowFocused() {
 		return false
 	}
 	return ti.blinkPhase == 0

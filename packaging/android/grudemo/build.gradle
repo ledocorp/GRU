@@ -1,0 +1,41 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace = "org.ledocorp.gru.demo"
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "org.ledocorp.gru.demo"
+        minSdk 21
+        targetSdk 34
+        versionCode 1
+        versionName "0.1.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+        debug {
+            debuggable true
+        }
+    }
+
+    sourceSets {
+        main {
+            java.srcDirs = ['java']
+            jniLibs.srcDirs = ['libs']
+            res.srcDirs = ['res']
+            assets.srcDirs = ['assets']
+            manifest.srcFile 'AndroidManifest.xml'
+        }
+    }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+}

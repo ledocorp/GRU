@@ -1,6 +1,7 @@
-//go:build linux
+//go:build linux && !android
 
 // Package x11util activates Gru Notepad windows on X11 (WSLg, Linux desktop).
+// Android is excluded: GOOS=android also sets the linux build tag.
 package x11util
 
 /*

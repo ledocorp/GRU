@@ -342,6 +342,17 @@ func (e *Element) setBoundsNoMark(r rl.Rectangle) {
 	e.drawDirty = true
 }
 
+// PinScreenBounds sets screen-absolute bounds without bubbling layoutDirty.
+// Use after Layout to keep overlay chrome (BottomNav) aligned when a later
+// flex pass must not immediately overwrite the pin via MarkDirty→Layout.
+func (e *Element) PinScreenBounds(r rl.Rectangle) {
+	if e.bounds == r {
+		return
+	}
+	e.bounds = r
+	e.MarkDrawDirty()
+}
+
 // AddChild implements Node.AddChild.
 // Note: Primarily intended for Container widgets.
 func (e *Element) AddChild(child Node) {

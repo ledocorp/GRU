@@ -13,6 +13,7 @@ How Gru’s core hangs together — **split chapters**, not one megafile.
 | 3 | [layout.md](layout.md) | Chrome insets, flex, Viewport vs fill-height |
 | 4 | [rendering.md](rendering.md) | 1× present path, overlay targets, idle / wake |
 | 5 | [linux-s1-text.md](linux-s1-text.md) | Linux sticky text polish (outline AA, soft-bold, kern, baseline lock); full decision log + Windows bold PR note |
+| — | [../ANDROID_CODE.md](../ANDROID_CODE.md) · [../ANDROID_DENSITY.md](../ANDROID_DENSITY.md) | Android NativeActivity map; density vs Linux 1:1; S1 text on GLES |
 | 6 | [webview.md](webview.md) | HWND vs GL — full guide: [../WEBVIEW.md](../WEBVIEW.md) |
 | 7 | [input-focus.md](input-focus.md) | Pointer routing, overlays, WebView handoff |
 

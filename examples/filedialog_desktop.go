@@ -61,6 +61,12 @@ func PickTextFileOpen() (string, error) {
 
 // PickTextFileSave shows the OS save-file dialog. defaultName may be empty.
 func PickTextFileSave(defaultName string) (string, error) {
+	return PickTextFileSaveWith(defaultName, nil)
+}
+
+// PickTextFileSaveWith is the desktop save picker; content is ignored (caller writes).
+func PickTextFileSaveWith(defaultName string, content []byte) (string, error) {
+	_ = content
 	ui.CloseContextMenu()
 	opts := []zenity.Option{
 		zenity.Title("Save As"),
@@ -74,6 +80,22 @@ func PickTextFileSave(defaultName string) (string, error) {
 		return "", ErrFileDialogCancelled
 	}
 	return path, err
+}
+
+// StartTextFileOpen runs the desktop open picker then onDone (same-thread).
+func StartTextFileOpen(onDone func(path string, err error)) {
+	path, err := PickTextFileOpen()
+	if onDone != nil {
+		onDone(path, err)
+	}
+}
+
+// StartTextFileSave runs the desktop save picker then onDone (same-thread).
+func StartTextFileSave(defaultName string, content []byte, onDone func(path string, err error)) {
+	path, err := PickTextFileSaveWith(defaultName, content)
+	if onDone != nil {
+		onDone(path, err)
+	}
 }
 
 // PickHTMLReportSave shows the OS save-file dialog for an HTML plan report.

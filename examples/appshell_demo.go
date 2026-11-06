@@ -51,10 +51,13 @@ func (s *appShellScene) Build(doc *ui.Document) {
 		"Menu opens Drawer · overflow opens menu · FAB (+) opens BottomSheet · BottomNav switches tabs.")
 
 	bottom := ui.NewBottomNavigationBar("appshell-nav", []ui.BottomNavItem{
-		{Phosphor: ui.PhosphorHouse, Label: "Home"},
-		{Phosphor: ui.PhosphorMagnifyingGlass, Label: "Search", Badge: "3"},
-		{Phosphor: ui.PhosphorUser, Label: "Profile"},
+		{Phosphor: ui.PhosphorHouse, Icon: "⌂", Label: "Home"},
+		{Phosphor: ui.PhosphorMagnifyingGlass, Icon: "⌕", Label: "Search", Badge: "3"},
+		{Phosphor: ui.PhosphorUser, Icon: "☺", Label: "Profile"},
 	}, s.tab, 0, 0, 0, 0)
+	for _, name := range []string{ui.PhosphorHouse, ui.PhosphorMagnifyingGlass, ui.PhosphorUser} {
+		ui.Icons.EnsureLoaded(name, ui.IconRegular)
+	}
 	bottom.OnChange = func(i int) {
 		titles := []string{"Home", "Search", "Profile"}
 		if i >= 0 && i < len(titles) {
@@ -71,6 +74,9 @@ func (s *appShellScene) Build(doc *ui.Document) {
 	fab.SetPhosphorIcon(ui.PhosphorPlus, ui.PhosphorRegular)
 	ui.Phosphor.EnsureLoaded(ui.PhosphorPlus, ui.PhosphorRegular)
 	fab.Anchor = vp
+	if ui.AndroidGLES() {
+		fab.Margin = 24 // keep clear of gesture bar / shell edge on phones
+	}
 	fab.OnClick = func() {
 		ui.ShowBottomSheet(s.sheetActions, 0.38)
 	}

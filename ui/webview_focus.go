@@ -139,6 +139,9 @@ func (wv *WebViewPanel) AcquireWebFocus(doc *Document) {
 // other widgets — those keep their existing click handlers (§5).
 
 func RouteScenePointerFocus(doc *Document) {
+	if AndroidGLES() && PointerClickPending() {
+		ArmIMEForUserGesture()
+	}
 
 	if doc == nil || doc.Root == nil || ScenePointerBlocked() {
 

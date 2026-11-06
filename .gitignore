@@ -17,3 +17,19 @@ vendor/
 
 # Agent / local only
 .cursor/
+
+# Android (built .so / Gradle / local SDK hints)
+.android/
+packaging/android/**/libs/
+packaging/android/**/build/
+packaging/android/**/.gradle/
+packaging/android/local.properties
+packaging/android/**/assets/fonts/
+packaging/android/**/assets/icons/
+packaging/android/**/assets/web/
+*.so
+resource.syso.android-park
+
+# Local binaries / accidental captures (dist/ already ignored)
+/bin/
+/screenshot*.png

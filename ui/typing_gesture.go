@@ -28,7 +28,7 @@ func TypingGestureActive() bool {
 // of the frame without consuming GetCharPressed (those widgets drain that queue
 // during Update).
 func SampleEditorKeyboardWake(root Node) WakeSummary {
-	if root == nil || !rl.IsWindowFocused() {
+	if root == nil || !PlatformWindowFocused() {
 		return WakeSummary{}
 	}
 	if findFocusedTextEditor(root) == nil &&

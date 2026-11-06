@@ -95,7 +95,10 @@ func MountSceneHeader(vp *ui.Viewport, id, title, subtitle string) *ui.Header {
 func MountEdgeToEdgeRoot(doc *ui.Document, id string, row bool) *ui.Container {
 	clearRootChildren(doc)
 	w, h := float32(doc.Width), float32(doc.Height)
-	root := ui.NewContainer(id+"-root", 0, 0, w, h)
+	// Screen-absolute content band (below ChromeTop). Y=0 here left BottomNav
+	// hit-testing chromeTop px too high on Android until the next Resize fit.
+	y := doc.ChromeTop()
+	root := ui.NewContainer(id+"-root", 0, y, w, h)
 	root.LayoutType = ui.LayoutFlex
 	if row {
 		root.FlexDirection = ui.FlexRow
@@ -155,6 +158,10 @@ func MountAppShellRoot(doc *ui.Document, id string) AppShellMount {
 	shell.LayoutType = ui.LayoutFlex
 	shell.FlexDirection = ui.FlexColumn
 	shell.SetStyle("transparent")
+	// Phone: horizontal inset so ListTile switches / FAB stay on-canvas.
+	if ui.AndroidGLES() {
+		shell.SetStyleOverrides(ui.Style{Padding: 20})
+	}
 	doc.Root.AddChild(shell)
 	return AppShellMount{Shell: shell}
 }

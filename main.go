@@ -96,7 +96,11 @@ func navDirectoryButtonWidth() float32 {
 }
 
 // demoNavBottom returns chrome reserved for the demo launcher footer, or 0 when hidden.
+// Android: hide the desktop Tab/Scenes strip — it steals height and confuses phone chrome.
 func demoNavBottom(scene examples.Scene) int32 {
+	if isAndroidApp() {
+		return 0
+	}
 	if scene != nil && scene.HideDemoNav() {
 		return 0
 	}
@@ -366,14 +370,28 @@ func runApp() {
 	rl.InitWindow(initW, initH, appInitWindowTitle())
 	ui.ReinforceLinuxAppID()
 	appinstance.RaiseRunningInstance = platformWindowFocus
-	// Seed windowW/H from the real client immediately — do not keep init constants
-	// through rem/atlas/scene Build (desktop previously synced only on first frame).
-	windowW, windowH = readClientSizeClamped()
-	if windowW < 1 {
-		windowW = initW
-	}
-	if windowH < 1 {
-		windowH = initH
+	if isAndroidApp() {
+		// Undo raylib AWINDOW_FLAG_FULLSCREEN; request content-rect insets.
+		ui.EnsureAndroidInsetFlags()
+		windowW = int32(rl.GetScreenWidth())
+		windowH = int32(rl.GetScreenHeight())
+		windowW, windowH = appNormalizeAndroidClientSize(windowW, windowH)
+		if windowW < 1 {
+			windowW = 360
+		}
+		if windowH < 1 {
+			windowH = 640
+		}
+	} else {
+		// Seed windowW/H from the real client immediately — do not keep init constants
+		// through rem/atlas/scene Build (desktop previously synced only on first frame).
+		windowW, windowH = readClientSizeClamped()
+		if windowW < 1 {
+			windowW = initW
+		}
+		if windowH < 1 {
+			windowH = initH
+		}
 	}
 	setupPlatformWindowHooks()
 	if appUsesCustomChrome() {
@@ -407,8 +425,11 @@ func runApp() {
 	ui.RefreshDisplayScale()
 	// Rem before atlas/strike prewarm — 4-phase targets rem-body (~30 @ dpi 1.25),
 	// not the default RootFontSize=16 (which wrongly baked ph=4 on sticky 20).
+	// Also lets Android bitmap bake track phone rem (M1/M2).
 	ui.RefreshTypeScaleFromWindow(windowW, windowH)
-	ui.IconsEagerWarm = true // Studio catalog needs WarmGlyphNames at first paint
+	// Studio catalog needs WarmGlyphNames at first paint on desktop; eager remix
+	// warm is heavy on GLES cold start.
+	ui.IconsEagerWarm = !isAndroidApp()
 	ui.InitDisplayAwareAtlases()
 	applyTextEngineMode()
 	defer ui.UnloadSDFFonts()
@@ -435,6 +456,10 @@ func runApp() {
 	}
 	// Rem already seeded above; keep in sync if window size changed during atlas init.
 	ui.RefreshTypeScaleFromWindow(windowW, windowH)
+	if isAndroidApp() {
+		fmt.Fprintf(os.Stderr, "grudemo android: size=%dx%d dpi=%.2f rem=%.0f font=%s\n",
+			windowW, windowH, ui.DisplayScale, ui.RootFontSize, ui.UIFontBackend())
+	}
 	ui.Toasts.SetWindowSize(windowW, windowH)
 	ui.NotificationCenterMgr.SetWindowSize(windowW, windowH)
 	ui.Tooltips.SetWindowSize(windowW, windowH)
@@ -530,6 +555,8 @@ func runApp() {
 		doc.SetChromeBottom(float32(demoNavBottom(activeScene)))
 		if borderless {
 			doc.SetChromeTop(ui.TitleBarHeight)
+		} else if isAndroidApp() {
+			ui.ApplyAndroidSafeInsets(doc, float32(demoNavBottom(activeScene)), windowW, windowH)
 		}
 		activeScene.Build(doc)
 		examples.PreloadScenePhosphor(doc)
@@ -553,7 +580,10 @@ func runApp() {
 		// NeedsRedraw to skip the draw pass on clean frames (the superTarget
 		// persists and is blitted instead). In 1× fallback mode it allocates
 		// a RenderTexture2D so the same skip-and-blit logic applies.
-		doc.EnableUIRenderTexture(true)
+		// Android GLES: draw 1× direct (hello path) — skip UI RT FBOs for now.
+		if !isAndroidApp() {
+			doc.EnableUIRenderTexture(true)
+		}
 		if doc.Root != nil {
 			if doc.Root.IsDirty() {
 				doc.Root.Layout()
@@ -721,6 +751,11 @@ func runApp() {
 		fmt.Fprintln(os.Stderr, "Gru: presenting first frame (window stays hidden until ready)…")
 	}
 
+	androidSettleFrames := 0
+	if isAndroidApp() {
+		androidSettleFrames = 8 // surface size often settles a few frames after APP_CMD_INIT_WINDOW
+	}
+
 	// ── Main loop ─────────────────────────────────────────────────────────────
 	for !rl.WindowShouldClose() {
 		if androidBackPressed() && !ui.OverlayBlocksSceneInput() {
@@ -806,6 +841,19 @@ func runApp() {
 			// ForceFullLayout every resize frame walked the whole tree + cleared
 			// text measures — Responsive + Notepad felt stuck at ~8 redraws/s.
 			doc.InvalidatePaint()
+			if isAndroidApp() {
+				androidSettleFrames = 8
+			}
+		}
+		if androidSettleFrames > 0 && doc != nil {
+			if ui.ApplyAndroidSafeInsets(doc, float32(demoNavBottom(activeScene)), windowW, windowH) {
+				doc.Resize(windowW, windowH)
+			}
+			doc.ForceFullLayout()
+			examples.FinishShellMount(doc)
+			doc.InvalidatePaint()
+			androidSettleFrames--
+			frameWake.Add(ui.WakeResize, "android-settle")
 		}
 		if rl.IsWindowReady() {
 			zoomed := rl.IsWindowMaximized()
