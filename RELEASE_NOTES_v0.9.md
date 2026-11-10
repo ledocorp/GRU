@@ -2,7 +2,7 @@
 
 Maintainer rollup for the **0.9** train (tip sync → platform S1).  
 Public GitHub cut should use a scrubbed subset (no private product names).  
-Tagged points so far: **v0.9.0**, **v0.9.1**; platform merges on `main` @ `b8a763f` (candidate **v0.9.2**).
+Tagged points so far: **v0.9.0**, **v0.9.1**; platform merges on `main`; tagged **v0.9.2** (2026-11-10).
 
 ---
 
@@ -55,7 +55,7 @@ Deep dive: `docs/architecture/linux-s1-text.md` (public tree after platform merg
 
 ---
 
-## Platform S1 merges → main (2026-11-10) — candidate v0.9.2
+## v0.9.2 — Platform S1 merges (2026-11-10)
 
 **Commits (merge --no-ff, Shawn only, no Cursor trailer):**
 
@@ -103,7 +103,7 @@ Maintainer undo notes live in the private tip-sync staging doc (`PLATFORM_S1_MER
 
 ## Still open / follow-ups (not blocking v0.9.2 tag)
 
-- Tag **v0.9.2** + GitHub Release when Shawn signs off (notes = scrubbed public subset of this file).
+- [x] Tag **v0.9.2** + GitHub Release (2026-11-10).
 - Public **gru-notepad**: Linux host APIs need toolkit tip that exports them (now on `main`); re-pin / rebuild against post-merge tip; strip Cursor co-author on new commits only.
 - Optional A/B: Windows panel-title `FontDensity` 1.05 vs 1.0 under ClearType (Linux needed 1.0).
 - `gru-experiments` seed still Tip P3.
@@ -113,7 +113,7 @@ Maintainer undo notes live in the private tip-sync staging doc (`PLATFORM_S1_MER
 ## Module
 
 ```bash
-go get github.com/ledocorp/gru@v0.9.1   # last tag; tip = main @ b8a763f until v0.9.2
+go get github.com/ledocorp/gru@v0.9.2
 go run ./cmd/hello
 go run -tags grudemo .
 ```

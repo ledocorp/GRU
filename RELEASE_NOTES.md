@@ -1,71 +1,29 @@
-# Gru toolkit v0.9.x — cumulative notes (draft toward v0.9.2)
+# v0.9.2 — Linux + Android S1 on the public tip
 
-Rollup of the **0.9** public tip: S1 ship default, export fix, then Linux + Android S1 experience merges.
+Builds on **v0.9.0** (S1 ship default) and **v0.9.1** (`x11util` export).
 
-**Last tag:** `v0.9.1` · **main tip:** platform S1 merges (2026-11-10). Tag **v0.9.2** when cut.
+## Highlights
 
----
+- **Linux S1:** 1:1 present (client = window; `DisplayScale=1`); sticky Latin via outline → fx AA greyscale; chrome soft-bold Poppins Medium/SemiBold; Wayland/X11 chrome helpers; desktop packaging.
+- **Android S1 (beta):** NativeActivity path — density/`Dp`, IME, SAF file pick, insets; GLES sticky text; skip desktop-only shaders/SSAA FBOs; `packaging/android/` + scripts.
+- **Windows:** unchanged S1 story (DirectWrite ClearType, `segoeuib` chrome Bold). Verified after merges: hello/grudemo build, `go test ./ui/`, S1 smoke.
+- Bold looking different on Linux vs Windows is **expected** (see cumulative notes / `docs/architecture/linux-s1-text.md`).
 
-## Bold looks different on Linux vs Windows — expected
+## Undo anchors (if needed)
 
-Not a Windows “bold broken” bug. Post-merge Windows smoke shows chrome Bold on **Segoe UI Bold** + DirectWrite ClearType (`segoeuib.ttf`, `bold=8` strikes).
+| Ref | Points to |
+|-----|-----------|
+| `pre-platform-s1-merge` / `main-pre-platform-s1` | Before both merges (`v0.9.1`) |
+| `pre-android-s1-merge` / `main-pre-android-s1` | After Linux only |
 
-| | Windows | Linux / Android |
-|--|---------|-----------------|
-| Raster | DirectWrite ClearType sticky | Outline → fx AA greyscale sticky |
-| Chrome Bold | `segoeuib` (Segoe Bold) | Poppins Medium (≤18px) / SemiBold |
-| Present | SSAA 1× + monitor DPI for atlases | SSAA 1×; Linux DisplayScale=1 (1:1) |
+Safer than force-push: `git revert -m 1` on the merge commits (see maintainer undo doc).
 
-Linux avoids Poppins-Bold 700 under greyscale AA (read as muddy). Details: [`docs/architecture/linux-s1-text.md`](docs/architecture/linux-s1-text.md).
-
----
-
-## v0.9.0 — S1 ship default
-
-- Default **SSAA 1×** present (not 2×). Sticky ClearType/LCD Latin, glyph floor, coverage AA.
-- Optional `GRU_SSAA` / `GRU_RENDER_QUALITY` for testing.
-- fx emit-C kernels ship for default CGO builds (`-tags gru_nofx` / `GRU_FX_*=0` to opt out).
-- Public dogfood: **`grudemo`**. EqualFill row-slice fix; export hygiene.
+## Module
 
 ```bash
-go get github.com/ledocorp/gru@v0.9.0
-```
-
-Showcase: [gru-notepad v0.9.0](https://github.com/shawnlondono/gru-notepad) (pins a later toolkit patch).
-
----
-
-## v0.9.1 — x11util export
-
-- Add missing **`x11util`** package so Linux `appinstance` raise resolves in the module zip.
-
-```bash
-go get github.com/ledocorp/gru@v0.9.1
-```
-
----
-
-## After v0.9.1 on main — Linux + Android S1 (candidate v0.9.2)
-
-Merged with `--no-ff` (easy revert). Undo anchors: `pre-platform-s1-merge`, `pre-android-s1-merge`.
-
-**Linux:** 1:1 present; outline sticky text; soft-bold Poppins; Wayland/X11 chrome helpers; desktop packaging/docs.
-
-**Android:** NativeActivity density/IME/SAF/insets; GLES sticky text; skip desktop-only shaders/SSAA FBOs; packaging under `packaging/android/`.
-
-**Windows checks after merge:** `go build` hello + grudemo, `go test ./ui/`, hello S1 smoke (DWrite + segoeuib) — green.
-
----
-
-## Module (until v0.9.2 is tagged)
-
-```bash
-go get github.com/ledocorp/gru@v0.9.1
-# or @main for platform S1 tip
+go get github.com/ledocorp/gru@v0.9.2
 go run ./cmd/hello
 go run -tags grudemo .
 ```
 
----
-
-*LedoCorp / Shawn Londono — GPLv3*
+Full 0.9.x rollup: [`RELEASE_NOTES_v0.9.md`](RELEASE_NOTES_v0.9.md).
