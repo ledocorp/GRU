@@ -1,10 +1,10 @@
 # Gru
 
-**Version:** 0.9.0 (tip sync — S1 present / text ship default)
+**Version:** 0.9.2 (S1 present/text · Linux S1 · Android beta)
 
 **Gru (GRU)** is a Go-first UI toolkit (retained-mode, Raylib-backed) for building desktop applications.
 
-**License:** [GNU GPLv3](LICENSE) · **BDFL** (no public PRs) · version **0.9.0**  
+**License:** [GNU GPLv3](LICENSE) · **BDFL** (no public PRs) · version **0.9.2**  
 **Third-party notices:** [NOTICE](NOTICE)  
 **Copyright:** Shawn Londono and LedoCorp  
 **Publisher:** [LedoCorp](https://ledocorp.org) · **Maintainer:** Shawn Londono
@@ -18,6 +18,16 @@
 - Optional **WebView2** demos (`-tags webview2`) on Windows  
 - **`cmd/gru`** — scaffold, build, and package apps (`gru new`, `gru build`, `gru package`)  
 - **Sample apps** — `cmd/hello` (native) and `cmd/webviewhello` (FillClient WebView shell)
+
+## Platforms
+
+| Platform | Status |
+|----------|--------|
+| **Windows** | Primary dogfood — S1 default (1x present + sticky ClearType / LCD Latin) |
+| **Linux** | S1 tip — 1:1 present, outline sticky text, Wayland/X11 chrome helpers |
+| **Android** | **Beta** NativeActivity path (density, IME, packaging under `packaging/android/`) |
+
+Chrome “Bold” can look different on Linux vs Windows by design (Poppins soft-bold greyscale vs Segoe Bold ClearType). See [docs/architecture/linux-s1-text.md](docs/architecture/linux-s1-text.md).
 
 ## Showcase app (separate repo)
 
@@ -40,7 +50,7 @@ Commercial dual-licensing may come later; it is **not** part of this release.
 ## Module
 
 ```bash
-go get github.com/ledocorp/gru@v0.9.0
+go get github.com/ledocorp/gru@v0.9.2
 ```
 
 ```go
@@ -49,9 +59,9 @@ import "github.com/ledocorp/gru/ui"
 
 Use `@latest` once you are comfortable tracking the newest tag.
 
-## Quick start (Windows)
+## Quick start
 
-From the **repository root** (folder with `go.mod`, `assets/`, `pages/`):
+From the **repository root** (folder with `go.mod`, `assets/`):
 
 ```bash
 go run ./cmd/hello
@@ -77,6 +87,7 @@ go run ./cmd/gru new myapp --webview
 | Composition | [docs/COMPOSITION.md](docs/COMPOSITION.md) |
 | WebView | [docs/WEBVIEW.md](docs/WEBVIEW.md) |
 | Architecture | [docs/architecture/README.md](docs/architecture/README.md) |
+| Linux S1 text | [docs/architecture/linux-s1-text.md](docs/architecture/linux-s1-text.md) |
 | Widgets | [docs/widgets/README.md](docs/widgets/README.md) |
 | API | [docs/api/README.md](docs/api/README.md) |
 | Demo index | [docs/DEMO_INDEX.md](docs/DEMO_INDEX.md) |
@@ -89,8 +100,6 @@ go run ./cmd/gru new myapp --webview
 | **F11** | Perf overlay (optional) |
 
 **Pull requests are not accepted** on this repository — see [CONTRIBUTING.md](CONTRIBUTING.md).
-
-Primary target today: **Windows**.
 
 ---
 
@@ -117,7 +126,6 @@ Gru depends on these projects. Please respect their licenses. Full texts and not
 | **[go-webview2](https://github.com/wailsapp/go-webview2)** (vendored) | Windows WebView host | MIT / ISC (loader) | Vendored under `internal/go-webview2` |
 | **Microsoft Edge WebView2** | Embedded web runtime (Windows) | Microsoft redistribution terms | https://developer.microsoft.com/microsoft-edge/webview2 |
 
-
 ---
 
 ## Contributing
@@ -130,4 +138,4 @@ Report security issues per [SECURITY.md](SECURITY.md).
 
 ---
 
-*Gru (GRU) — Copyright Shawn Londono and LedoCorp — GPLv3 · BDFL · 0.8.0*
+*Gru (GRU) — Copyright Shawn Londono and LedoCorp — GPLv3 · BDFL · 0.9.2*
