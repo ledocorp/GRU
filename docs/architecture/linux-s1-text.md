@@ -227,19 +227,19 @@ Cosmic looks leaner because it is a **different stack** (hinted FreeType, often 
 
 ---
 
-## PR note — Windows bold utilization (open follow-up)
+## Windows bold utilization (verified 2026-11-10)
 
-Linux polish exposed that **chrome Bold must actually resolve to a bold face and match the kern face**. Windows was not the primary dogfood surface for this campaign; **verify before calling Windows “done”:**
+Linux polish required chrome Bold to resolve to a real bold face (Linux had historically drawn Regular). **Windows is not “failing to read bold”** when demos look leaner than Linux soft-bold — that is Segoe Bold + ClearType vs Poppins Medium/SemiBold greyscale.
 
-| Check | Why |
-|-------|-----|
-| Does S1 chrome `Style.Bold` hit `segoeuib` / DWrite bold strikes, or still Regular? | Linux historically ignored chrome Bold entirely |
-| Does HarfBuzz / shaped measure use the **same** bold face as DWrite bake? | Linux Medium-bake + Bold-kern mismatch |
-| Segoe Bold at 14–16px vs Poppins Medium policy | Windows may still look leaner (ClearType); that can be correct — confirm it is not Regular |
-| `FontDensity` 1.05 on titles | Dropped on Linux greyscale; Windows ClearType may still want a nudge — A/B before copying 1.0 blindly |
-| `batchCaption` / `form-value` misuse | Theme bug is cross-platform; hints should stay `form-label` |
+| Check | Result after platform S1 merge |
+|-------|--------------------------------|
+| S1 chrome `Style.Bold` → `segoeuib` / DWrite bold strikes | **Yes** — smoke log `soft-bold segoeuib.ttf` + `bold=8` |
+| DWrite path still preferred on Windows | **Yes** — `ft-grey+strikes+dwrite-lcd hybrid @ SSAA 1×` |
+| Segoe Bold vs Poppins Medium | **Expected** visual delta; not Regular-as-Bold |
+| `FontDensity` 1.05→1.0 on panel-title | Shared theme change; optional Windows ClearType A/B later |
+| `batchCaption` → `form-label` | Shared; correct |
 
-Capture Windows screenshots of Scenes, panel titles, Counter Demo, and Notepad `**bold**` in the linux-experience PR description. Treat “Windows bold path parity” as an explicit checklist item, not assumed green.
+Demo host chrome remaining intact after merge matches this (Windows bold path live).
 
 ---
 
