@@ -18,8 +18,13 @@ func platformWindowFocus() {
 		return
 	}
 	// GetWindowHandle() on Linux is GLFWwindow*, not an X11 Window id (raylib TODO).
-	// Raise our top-level window by title via a separate X connection.
-	_ = x11util.RaiseNotepadWindow()
+	// X11/XWayland: raise by title over a side X connection. Pure Wayland: GLFW focus.
+	if ui.GLFWPlatformIsX11() {
+		if x11util.RaiseNotepadWindow() {
+			return
+		}
+	}
+	ui.FocusPlatformWindow()
 }
 
 func setupPlatformWindowHooks() {}

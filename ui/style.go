@@ -354,13 +354,15 @@ var CurrentTheme = Theme{
 		BorderColor:     rl.NewColor(190, 192, 200, 255),
 		CornerRadius:    6,
 	},
-	// Panel title bar: deep slate background, near-white text
+	// Panel title bar: deep slate background, near-white text.
+	// FontDensity 1.05 was a ClearType optical nudge; under greyscale outline AA
+	// it just fattened Poppins Medium/SemiBold titles (Counter, Goal Progress).
 	"panel-title": {
 		BackgroundColor: rl.NewColor(42, 44, 58, 255),
 		TextColor:       rl.NewColor(225, 226, 234, 255),
 		FontSize:        16,
 		Bold:            true,
-		FontDensity:     1.05,
+		FontDensity:     1.0,
 		Padding:         10,
 	},
 	// Progress bar track — pill-shaped, borderless, clean
@@ -1076,10 +1078,13 @@ var CurrentTheme = Theme{
 	},
 
 	// form-value — readout / status text beside controls (body size, not caption).
+	// MinFontSize + NoCaptionBold keep S1 sticky strikes lean (same as form-label).
 	"form-value": {
 		BackgroundColor: rl.NewColor(0, 0, 0, 0),
 		TextColor:       rl.NewColor(30, 32, 50, 255),
 		FontSize:        18,
+		NoCaptionBold:   true,
+		MinFontSize:     16,
 	},
 
 	// label — inline text on surfaces (transparent; no white block behind copy).

@@ -12,8 +12,9 @@ How Gru’s core hangs together — **split chapters**, not one megafile.
 | 2 | [window-chrome.md](window-chrome.md) | Undecorated window, TitleBar, grab + double-click, DWM |
 | 3 | [layout.md](layout.md) | Chrome insets, flex, Viewport vs fill-height |
 | 4 | [rendering.md](rendering.md) | 1× present path, overlay targets, idle / wake |
-| 5 | [webview.md](webview.md) | HWND vs GL — full guide: [../WEBVIEW.md](../WEBVIEW.md) |
-| 6 | [input-focus.md](input-focus.md) | Pointer routing, overlays, WebView handoff |
+| 5 | [linux-s1-text.md](linux-s1-text.md) | Linux sticky text polish (outline AA, soft-bold, kern, baseline lock); full decision log + Windows bold PR note |
+| 6 | [webview.md](webview.md) | HWND vs GL — full guide: [../WEBVIEW.md](../WEBVIEW.md) |
+| 7 | [input-focus.md](input-focus.md) | Pointer routing, overlays, WebView handoff |
 
 ---
 
@@ -30,4 +31,5 @@ How Gru’s core hangs together — **split chapters**, not one megafile.
 
 - [../GETTING_STARTED.md](../GETTING_STARTED.md) · [../CLI.md](../CLI.md) · [../BUILD.md](../BUILD.md)  
 - [../COMPOSITION.md](../COMPOSITION.md) · [../widgets/README.md](../widgets/README.md) · [../api/README.md](../api/README.md)  
-- [../DEMO_INDEX.md](../DEMO_INDEX.md) · [../WEBVIEW.md](../WEBVIEW.md) · [../README.md](../README.md)
+- [../DEMO_INDEX.md](../DEMO_INDEX.md) · [../WEBVIEW.md](../WEBVIEW.md) · [../README.md](../README.md)  
+- Linux present 1:1 policy: [../../LINUX_S1_RETARGET_REVIEW.md](../../LINUX_S1_RETARGET_REVIEW.md)

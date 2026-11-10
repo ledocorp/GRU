@@ -242,6 +242,10 @@ func NewTitleBar(title string, style TitleBarStyle, onClose, onMin, onMax func()
 // our tracked position. Always use this instead of calling SetWindowPosition
 // directly, to keep trackedX/Y in sync.
 func (tb *TitleBar) moveWindow(x, y int) {
+	if !WindowPositionSupported() {
+		// Wayland: SetWindowPosition is unavailable (GLFW 65548).
+		return
+	}
 	rl.SetWindowPosition(x, y)
 	tb.trackedX = int32(x)
 	tb.trackedY = int32(y)
@@ -299,6 +303,12 @@ func (tb *TitleBar) beginDragFromTitle(screenMX, screenMY float32, mouse rl.Vect
 // beginDragFromTitle is only used after that threshold or on the fallback path.
 func (tb *TitleBar) armDragFromTitle(screenMX, screenMY float32) {
 	ResetWheelScrollGesture()
+	// Wayland: compositor owns the move (xdg_toplevel.move).
+	if platformBeginInteractiveMove() {
+		tb.dragging = false
+		tb.titleClickPending = false
+		return
+	}
 	tb.dragging = true
 	tb.dragStartMX = screenMX
 	tb.dragStartMY = screenMY
@@ -309,12 +319,18 @@ func (tb *TitleBar) armDragFromTitle(screenMX, screenMY float32) {
 // seedPos seeds trackedX/Y from GetWindowPosition() exactly once per
 // borderless session. After that we trust our own records.
 func (tb *TitleBar) seedPos() {
-	if !tb.posSeeded {
+	if tb.posSeeded {
+		return
+	}
+	if WindowPositionSupported() {
 		p := rl.GetWindowPosition()
 		tb.trackedX = int32(p.X)
 		tb.trackedY = int32(p.Y)
-		tb.posSeeded = true
+	} else {
+		tb.trackedX = 0
+		tb.trackedY = 0
 	}
+	tb.posSeeded = true
 }
 
 // ResetPos forces the tracked position to be re-seeded from GetWindowPosition()
@@ -336,6 +352,9 @@ func (tb *TitleBar) Update(windowW, windowH int32) {
 	// Seed our tracked window position if not done yet this borderless session.
 	tb.seedPos()
 
+	// Wayland: compositor move/resize steals the pointer without a RELEASE.
+	healedPointer := platformHealPointerButtons()
+
 	// Reset hover unconditionally — must not bleed across frames.
 	tb.hoverClose = false
 	tb.hoverMin = false
@@ -349,6 +368,7 @@ func (tb *TitleBar) Update(windowW, windowH int32) {
 
 	leftPressed := rl.IsMouseButtonPressed(rl.MouseButtonLeft)
 	leftReleased := rl.IsMouseButtonReleased(rl.MouseButtonLeft)
+	closeRelease := leftReleased && !healedPointer
 
 	// ── Button hover (computed every frame, takes priority over resize) ───────
 	closeX := float32(windowW) - closeBtnW
@@ -379,15 +399,23 @@ func (tb *TitleBar) Update(windowW, windowH int32) {
 			return
 		}
 	}
-	if leftReleased {
+	if closeRelease {
 		if tb.closeArmed && tb.hoverClose && tb.OnClose != nil {
 			tb.OnClose()
 		}
 		tb.closeArmed = false
+	} else if leftReleased {
+		tb.closeArmed = false
+	}
+
+	maximized := rl.IsWindowMaximized()
+	if maximized && tb.resizing {
+		tb.resizing = false
+		tb.resizeEdge = edgeNone
 	}
 
 	// ── Active resize drag ────────────────────────────────────────────────────
-	if tb.HandleResize && tb.resizing {
+	if tb.HandleResize && tb.resizing && !maximized {
 		dx := screenMX - tb.resizeStartMX
 		dy := screenMY - tb.resizeStartMY
 		tb.applyResize(dx, dy)
@@ -398,29 +426,12 @@ func (tb *TitleBar) Update(windowW, windowH int32) {
 		return // skip drag / double-click while resizing
 	}
 
-	// ── Resize initiation (click to start; cursor in ApplyResizeCursor) ───────
-	if tb.HandleResize {
-		edge := tb.edgeAt(mouse, windowW, windowH)
-		if leftPressed && edge != edgeNone {
-			ResetWheelScrollGesture()
-			tb.resizing = true
-			tb.resizeEdge = edge
-			tb.resizeStartMX = screenMX
-			tb.resizeStartMY = screenMY
-			tb.resizeStartWX = tb.trackedX
-			tb.resizeStartWY = tb.trackedY
-			tb.resizeStartWW = windowW
-			tb.resizeStartWH = windowH
-			return
-		}
-	}
-
-	// ── Title-area drag / double-click to toggle maximize ────────────────────
 	barRect := rl.NewRectangle(0, 0, float32(windowW), TitleBarHeight)
-	if leftPressed &&
-		rl.CheckCollisionPointRec(mouse, barRect) &&
-		!tb.hoverClose && !tb.hoverMax && !tb.hoverMin {
+	inTitleDragZone := rl.CheckCollisionPointRec(mouse, barRect) &&
+		!tb.hoverClose && !tb.hoverMax && !tb.hoverMin
 
+	// ── Title-area drag FIRST (before N-edge resize steals the press). ────────
+	if leftPressed && inTitleDragZone {
 		now := rl.GetTime()
 		interval := titleBarDoubleClickInterval
 		if titleBarNativeDblClickMaximize == nil {
@@ -435,19 +446,51 @@ func (tb *TitleBar) Update(windowW, windowH int32) {
 			tb.lastClickTime = 0
 			tb.titleClickPending = false
 			tb.dragging = false
-		} else if titleBarNativeDblClickMaximize != nil {
-			// Double-click maximize + drag: never arm drag on the first click.
-			// Wait for a second click (maximize) or a 4px move (drag) — same for
-			// restored and maximized. Arming drag immediately broke double-click.
-			tb.lastClickTime = now
+			return
+		}
+		tb.lastClickTime = now
+		// Native (Windows) or Wayland interactive-move: pending first so dblclick
+		// maximize isn't eaten by an immediate grab (avoids left-corner bump).
+		if titleBarNativeDblClickMaximize != nil || platformInteractiveMoveResizeSupported() || maximized {
 			tb.titleClickPending = true
 			tb.titleClickStartMX = screenMX
 			tb.titleClickStartMY = screenMY
 			tb.dragStartWX = tb.trackedX
 			tb.dragStartWY = tb.trackedY
 		} else {
-			tb.lastClickTime = now
 			tb.beginDragFromTitle(screenMX, screenMY, mouse)
+		}
+		if !tb.dragging && !tb.titleClickPending {
+			return
+		}
+	}
+
+	// ── Resize initiation (edges/corners; title body already handled) ─────────
+	if tb.HandleResize && !maximized {
+		edge := tb.edgeAt(mouse, windowW, windowH)
+		if edge == edgeN && inTitleDragZone {
+			edge = edgeNone
+		}
+		if leftPressed && edge != edgeNone {
+			ResetWheelScrollGesture()
+			if platformBeginInteractiveResize(edge) {
+				tb.resizing = false
+				tb.resizeEdge = edgeNone
+				tb.lastClickTime = 0
+				return
+			}
+			if !WindowPositionSupported() && edgeNeedsWindowOrigin(edge) {
+				return
+			}
+			tb.resizing = true
+			tb.resizeEdge = edge
+			tb.resizeStartMX = screenMX
+			tb.resizeStartMY = screenMY
+			tb.resizeStartWX = tb.trackedX
+			tb.resizeStartWY = tb.trackedY
+			tb.resizeStartWW = windowW
+			tb.resizeStartWH = windowH
+			return
 		}
 	}
 
@@ -467,7 +510,7 @@ func (tb *TitleBar) Update(windowW, windowH int32) {
 		}
 	}
 
-	if tb.dragging {
+	if tb.dragging && WindowPositionSupported() {
 		newX := int(tb.dragStartWX) + int(screenMX-tb.dragStartMX)
 		newY := int(tb.dragStartWY) + int(screenMY-tb.dragStartMY)
 		if newY < 0 {
@@ -569,6 +612,18 @@ func (tb *TitleBar) ApplyResizeCursor(windowW, windowH int32) {
 	if tb.chromeCursorActive {
 		rl.SetMouseCursor(rl.MouseCursorDefault)
 		tb.chromeCursorActive = false
+	}
+}
+
+// edgeNeedsWindowOrigin is true when software resize would SetWindowPosition
+// (W/N sides and corners that move origin). On Wayland that path is invalid —
+// use compositor interactive resize instead, or skip.
+func edgeNeedsWindowOrigin(edge resizeEdge) bool {
+	switch edge {
+	case edgeW, edgeN, edgeNW, edgeNE, edgeSW:
+		return true
+	default:
+		return false
 	}
 }
 

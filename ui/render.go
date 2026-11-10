@@ -46,10 +46,8 @@ import (
 // drops below a threshold to trade visual quality for performance, and calls
 // it back to 2× when headroom is restored.
 
-// RenderScale is the current supersampling multiplier (1.0, 1.5, or 2.0).
-// Widget code uses 1× logical coordinates throughout; this value is applied
-// internally by BeginSuperFrame (Camera2D zoom) and beginScissorMode (scissor
-// coordinate scaling). Use SetSupersamplingScale to change it at runtime.
+// RenderScale is the Camera2D zoom into the offscreen RT (SSAA quality tier).
+// Lean ship default is 1× — never a fractional DPI / present zoom.
 var RenderScale float32 = 1
 
 // superTarget is the 2× off-screen render target for cached UI content.
@@ -92,6 +90,9 @@ func clampDim(w, h int32) (int32, int32) {
 	return w, h
 }
 
+// PresentDeviceScale is kept for HUD compatibility; always 1 (no Camera DPI zoom).
+func PresentDeviceScale() float32 { return 1 }
+
 // InitSupersampling creates 2x render targets for the main UI and for transient
 // overlays (modals, tooltips, menus). Call once after rl.InitWindow.
 // Pair with defer ui.UnloadSupersampling().
@@ -119,11 +120,9 @@ func InitSupersampling(w, h int32) {
 }
 
 func applySupersampleTextureFilter(scale float32) {
-	// At SSAA 1× with ClearType strikes, bilinear blit softens RGB subpixel
-	// coverage (north star: present LCD 1:1). SDF Path A still uses bilinear
-	// when LCD strikes are off (point looked choppy on greyscale SDF).
+	// Lean quality (SSAA tier 1×): point blit. Quality SSAA>1 downscales with bilinear.
 	filter := rl.FilterBilinear
-	if scale <= 1.01 && PreferFTLCDChrome() {
+	if scale <= 1.01 {
 		filter = rl.FilterPoint
 	}
 	if superTarget.ID != 0 {
@@ -159,6 +158,10 @@ func EnsureOverlayTarget() {
 // Changing scale recreates the GPU render target; call this only when the FPS
 // monitor decides to step up or down (not every frame).
 func SetSupersamplingScale(scale float32) {
+	if scale < 1 {
+		scale = 1
+	}
+	BaseSupersamplingScale = scale
 	RescaleSupersampling(scale, logicalW, logicalH)
 }
 
@@ -210,7 +213,6 @@ func RescaleSupersampling(scale float32, w, h int32) {
 		rl.UnloadRenderTexture(overlayTarget)
 		overlayTarget = rl.RenderTexture2D{}
 	}
-	// Update stored logical size so SetSupersamplingScale can call us without args.
 	if w > 0 && h > 0 {
 		logicalW, logicalH = w, h
 	}
@@ -220,7 +222,6 @@ func RescaleSupersampling(scale float32, w, h int32) {
 	overlayTarget = rl.LoadRenderTexture(texW, texH)
 	applySupersampleTextureFilter(scale)
 	RenderScale = scale
-	BaseSupersamplingScale = scale
 	noteSuperTargetRecreated()
 }
 
@@ -383,7 +384,7 @@ func PresentSizeMismatch(dstW, dstH int32) bool {
 	if dstW != logicalW || dstH != logicalH {
 		return true
 	}
-	// At lean (scale≈1), GPU tex must equal logical dest for a true 1:1 copy.
+	// At lean (scale≈1), GPU tex must equal layout dest for a true 1:1 copy.
 	if RenderScale <= 1.01 && superTarget.ID != 0 {
 		t := superTarget.Texture
 		if t.ID != 0 && (int32(t.Width) != dstW || int32(t.Height) != dstH) {
@@ -393,6 +394,43 @@ func PresentSizeMismatch(dstW, dstH int32) bool {
 	return false
 }
 
+// presentFramebufferSize returns the EGL buffer size when it exceeds the logical
+// client (Wayland fractional scale). ok=false → use logical 1:1 present.
+// This is present mapping only — it does not change SSAA / S1 text scale.
+func presentFramebufferSize(logicalW, logicalH int32) (fbW, fbH int32, ok bool) {
+	fbW, fbH, ok = platformFramebufferSize()
+	if !ok {
+		rw, rh := int32(rl.GetRenderWidth()), int32(rl.GetRenderHeight())
+		if rw > logicalW+1 || rh > logicalH+1 {
+			fbW, fbH, ok = rw, rh, true
+		}
+	}
+	if !ok {
+		return 0, 0, false
+	}
+	logPresentFB(logicalW, logicalH, fbW, fbH)
+	if fbW > logicalW+1 || fbH > logicalH+1 {
+		return fbW, fbH, true
+	}
+	return 0, 0, false
+}
+
+// applyPresentFramebuffer is a no-op when layout already equals the FB
+// ([ClientLayoutSize]). If FB ever exceeds layout, viewport=FB + Ortho=layout.
+func applyPresentFramebuffer(logicalW, logicalH int32) {
+	fbW, fbH, ok := presentFramebufferSize(logicalW, logicalH)
+	if !ok {
+		return
+	}
+	rl.DrawRenderBatchActive()
+	rl.Viewport(0, 0, fbW, fbH)
+	rl.MatrixMode(rl.Projection)
+	rl.LoadIdentity()
+	rl.Ortho(0, float64(logicalW), float64(logicalH), 0, 0, 1)
+	rl.MatrixMode(rl.Modelview)
+	rl.LoadIdentity()
+}
+
 // BeginDrawingBorderless prepares the default framebuffer before blit.
 // Borderless: transparent clear + rounded fill (not ClearBackground(bgColor)).
 //
@@ -400,7 +438,9 @@ func PresentSizeMismatch(dstW, dstH int32) bool {
 // sync recreates the RT and redraws before blit. Present must stay 1:1 with the
 // RT logical size so ClearType at lean (scale 1) stays Regular weight with no
 // ghost layers.
+//
 func BeginDrawingBorderless(clearColor rl.Color, borderless bool, winW, winH int32) {
+	applyPresentFramebuffer(winW, winH)
 	if borderless {
 		rl.ClearBackground(rl.Blank)
 		DrawBorderlessWindowFill(winW, winH, clearColor)
@@ -462,14 +502,13 @@ func BlitToScreen(dstW, dstH int32) {
 }
 
 // blitTargetToScreen is the one present: 1:1 DrawTexturePro, BlendAlpha, point
-// filter at SSAA 1× LCD. Menu/footer already used this recipe. Directory must
-// too — a second blit (opaque copy / bilinear / stretch) is what made the list
-// heavy while the overlay stayed Regular.
+// filter at lean quality. Layout size already matches the FB on Wayland.
 func blitTargetToScreen(tex rl.Texture2D, dstW, dstH int32, alpha bool) {
 	if tex.ID == 0 || tex.Width < 1 || tex.Height < 1 || dstW < 1 || dstH < 1 {
 		return
 	}
-	if RenderScale <= 1.01 && PreferFTLCDChrome() {
+	applyPresentFramebuffer(dstW, dstH)
+	if RenderScale <= 1.01 {
 		rl.SetTextureFilter(tex, rl.FilterPoint)
 	}
 	src := rl.NewRectangle(0, 0, float32(tex.Width), -float32(tex.Height))

@@ -56,9 +56,11 @@ var (
 
 const ftLCDOpticalScale float32 = 0.93
 
-// PreferFTLCDChrome is true when GRU_TEXT_LCD=1, or automatically for S1 @ SSAA 1×
-// (exact strikes need subpixel coverage — greyscale alone stays soft vs browser).
-// Opt out: GRU_TEXT_LCD=0.
+// PreferFTLCDChrome enables ClearType-style RGB sticky strikes.
+//
+// Auto-on only when DirectWrite is available (Windows). FreeType "lite LCD"
+// (neighbor RGB) on Linux looks soft/fringed at 1:1 — greyscale sticky is
+// sharper there. Opt in anywhere with GRU_TEXT_LCD=1; opt out with =0.
 func PreferFTLCDChrome() bool {
 	v := strings.ToLower(strings.TrimSpace(EnvOr("GRU_TEXT_LCD", "GORY_TEXT_LCD")))
 	switch v {
@@ -67,7 +69,7 @@ func PreferFTLCDChrome() bool {
 	case "1", "on", "true", "yes", "lcd", "cleartype":
 		return true
 	default:
-		return PreferFTGreyStrikes() && EffectiveSupersamplingScale() <= 1.01
+		return PreferFTGreyStrikes() && EffectiveSupersamplingScale() <= 1.01 && dwriteLCDAvailable()
 	}
 }
 

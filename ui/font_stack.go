@@ -66,6 +66,13 @@ var monoFontCandidates = []string{
 	"assets/fonts/FiraCode/static/FiraCode-Medium.ttf",
 }
 
+func interVariableCandidates() []string {
+	return []string{
+		"assets/fonts/Inter/Inter-VariableFont_opsz,wght.ttf",
+		"assets/fonts/inter/Inter-VariableFont_opsz,wght.ttf",
+	}
+}
+
 func interFaceCandidates() []uiFacePaths {
 	// Default resolve order for family init / HUD (24pt mid ladder).
 	// Sticky strikes pick size-matched optical cuts via interFaceForStickySize.
@@ -78,6 +85,11 @@ func interFaceCandidates() []uiFacePaths {
 		"assets/fonts/Inter/Inter-Italic.ttf",
 		"assets/fonts/Inter/Inter-BoldItalic.ttf",
 	}}...)
+	// Variable Inter when static opticals are not vendored (Linux trees often
+	// ship only the opsz,wght VF).
+	if p := firstExisting(interVariableCandidates()...); p != "" {
+		out = append(out, uiFacePaths{p, p, p, p})
+	}
 	return out
 }
 
@@ -154,7 +166,7 @@ func interFaceForStickySize(sz int, bold bool) string {
 			return p
 		}
 	}
-	// Fall back across other opticals / generic Inter.
+	// Fall back across other opticals / generic Inter / variable Inter.
 	for _, set := range interFaceCandidates() {
 		cand := set.regular
 		if bold {
@@ -164,7 +176,7 @@ func interFaceForStickySize(sz int, bold bool) string {
 			return p
 		}
 	}
-	return ""
+	return firstExisting(interVariableCandidates()...)
 }
 
 func uiFontFileExists(path string) bool {

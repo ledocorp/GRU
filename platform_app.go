@@ -1,8 +1,8 @@
 // Platform helpers for desktop vs Android (raylib NativeActivity).
 //
 // This file is compiled on every GOOS; branches use isAndroidApp() so desktop
-// keeps MSAA, custom chrome, and default window size. Android-only entry is
-// main_android_init.go (build tag). See docs/ANDROID_CODE.md.
+// keeps custom chrome and default window size (MSAA on Windows only). Android-only
+// entry is main_android_init.go (build tag). See docs/ANDROID_CODE.md.
 package main
 
 import (
@@ -21,7 +21,12 @@ func appInitWindowFlags() uint32 {
 		// MSAA breaks EGL context creation on Android emulators/devices.
 		return uint32(rl.FlagVsyncHint)
 	}
-	flags := uint32(rl.FlagMsaa4xHint | rl.FlagVsyncHint)
+	// Linux/Wayland: no MSAA — resolve softens 1× present (same as S1HostWindowFlags).
+	// Windows keeps MSAA per docs/architecture/rendering.md.
+	flags := uint32(rl.FlagVsyncHint)
+	if runtime.GOOS != "linux" {
+		flags |= rl.FlagMsaa4xHint
+	}
 	if appUsesCustomChrome() {
 		flags |= rl.FlagWindowResizable | rl.FlagWindowUndecorated
 		// Hide until the first frame is drawn so users never see empty chrome

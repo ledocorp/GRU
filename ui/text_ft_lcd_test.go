@@ -19,8 +19,12 @@ func TestPreferFTLCDChromeOptIn(t *testing.T) {
 	t.Setenv("GRU_TEXT_LCD", "")
 	t.Setenv("GRU_TEXT_STRIKES", "")
 	BaseSupersamplingScale = 1
-	if !PreferFTLCDChrome() {
-		t.Fatal("S1 default (strikes @ SSAA 1×) must auto-enable LCD")
+	if dwriteLCDAvailable() {
+		if !PreferFTLCDChrome() {
+			t.Fatal("Windows S1 (DWrite) must auto-enable LCD")
+		}
+	} else if PreferFTLCDChrome() {
+		t.Fatal("without DWrite, S1 must default greyscale sticky (no lite LCD)")
 	}
 	t.Setenv("GRU_TEXT_STRIKES", "0")
 	if PreferFTLCDChrome() {

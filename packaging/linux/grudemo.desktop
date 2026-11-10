@@ -1,0 +1,15 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Gru Demo
+GenericName=UI Toolkit Demo
+Comment=Gru (GRU) demo gallery — retained-mode Go UI toolkit
+# Exec is rewritten by install-desktop.sh to the built binary path.
+Exec=grudemo
+Icon=grudemo
+Terminal=false
+Categories=Development;GUIDesigner;
+StartupNotify=true
+# Must match ui.PrepareLinuxAppID("grudemo") / Wayland app_id + X11 WM_CLASS.
+StartupWMClass=grudemo
+Keywords=gru;ui;raylib;demo;

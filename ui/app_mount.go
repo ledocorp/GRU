@@ -1,7 +1,5 @@
 package ui
 
-import rl "github.com/gen2brain/raylib-go/raylib"
-
 // Borderless app mount helpers — Studio-equivalent chrome without importing examples.
 // Canonical contract: docs/GRU_CORE.md + docs/ARCHIVE/RESPONSIVE_RESIZE_LAG_2026-08-21.md
 
@@ -102,8 +100,7 @@ func SettleBorderlessClientTextures(titleBar *TitleBar) {
 // Mid-drag: defer RT + shell layout (2026-08-21). On settle call
 // SettleBorderlessClientTextures. Never stretch the previous RT.
 func SyncBorderlessClientIfChanged(doc *Document, titleBar *TitleBar, fullW, fullH int32) (w, h int32, changed bool) {
-	w = int32(rl.GetScreenWidth())
-	h = int32(rl.GetScreenHeight())
+	w, h = ClientLayoutSize()
 	if w < 1 {
 		w = fullW
 	}
