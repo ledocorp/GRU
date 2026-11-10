@@ -196,6 +196,14 @@ func SupersamplingActive() bool { return superTarget.ID != 0 }
 // resizes the RT via ResizeWindowTextures. Skipping that stretches the old
 // target across the new client (fat text / clipped columns).
 func RescaleSupersampling(scale float32, w, h int32) {
+	if AndroidGLES() {
+		// Never allocate SSAA FBOs on GLES — see EffectiveSupersamplingScale.
+		RenderScale = 1
+		if w > 0 && h > 0 {
+			logicalW, logicalH = w, h
+		}
+		return
+	}
 	if scale < 1.0 {
 		scale = 1.0
 	}
@@ -706,6 +714,14 @@ func beginScissorFromRect(r rl.Rectangle) {
 }
 
 func beginScissorMode(x, y, w, h int32) {
+	// NativeActivity GLES: raylib flips scissor Y with currentFbo.height. When
+	// that disagrees with the ANativeWindow / layout height (system bars,
+	// 2272 vs 2400), every ClipChildren / Card body / Label Wrap pass clips
+	// ink to the wrong band — hello showed only the unscissored card chrome.
+	// Skip until the flip is verified against GetRenderHeight on-device.
+	if AndroidGLES() {
+		return
+	}
 	s := RenderScale
 	rl.BeginScissorMode(
 		int32(float32(x)*s),

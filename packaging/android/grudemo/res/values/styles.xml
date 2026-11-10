@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Not Theme.*.Light — Light themes blanked GLES on the API 34 emulator.
+         DeviceDefault.NoActionBar still allows statusBarColor overrides. -->
+    <style name="GruDemoTheme" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowBackground">#FFE4E5EB</item>
+        <item name="android:statusBarColor">#FFE4E5EB</item>
+        <item name="android:navigationBarColor">#FFE4E5EB</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>

@@ -1,4 +1,4 @@
-//go:build linux && !wayland
+//go:build linux && !android && !wayland
 
 package ui
 

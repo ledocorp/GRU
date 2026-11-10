@@ -88,6 +88,10 @@ void main() {
 
 // InitMSDFFont builds an MSDF/SDF-RGB atlas at pixelSize (typically EffectiveFTGreyAtlasSize).
 func InitMSDFFont(pixelSize int32) bool {
+	// Desktop GLSL 330 MSDF shader — skip on Android OpenGL ES.
+	if AndroidGLES() {
+		return false
+	}
 	unloadMSDFFont()
 	if pixelSize < 16 {
 		pixelSize = 16

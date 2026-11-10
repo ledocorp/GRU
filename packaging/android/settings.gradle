@@ -1,0 +1,20 @@
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+include ':hello'
+project(':hello').projectDir = new File(rootDir, 'hello')
+include ':grudemo'
+project(':grudemo').projectDir = new File(rootDir, 'grudemo')
+include ':webview'
+project(':webview').projectDir = new File(rootDir, 'webview')

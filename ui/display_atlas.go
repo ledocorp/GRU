@@ -1,8 +1,12 @@
 package ui
 
 import (
+	"sync"
+
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
+
+var androidDensityLogOnce sync.Once
 
 // T1.9 — DPR-scaled source atlases (SDF text + Remix icons). Layout stays logical;
 // FlagWindowHighdpi remains off. SSAA is not multiplied by DisplayScale.
@@ -53,10 +57,26 @@ func scaleAtlasPx(base int32) int32 {
 func EffectiveSDFAtlasSize() int32 { return scaleAtlasPx(SDFAtlasBasePx) }
 
 // EffectiveRemixAtlasSize returns the Remix icon-font atlas size for the current DPI.
-func EffectiveRemixAtlasSize() int32 { return scaleAtlasPx(RemixAtlasBasePx) }
+// Android GLES emulators often cap textures at 4096² — a 1280px glyph size with a
+// growing codepoint set overflows GenImageFontAtlas (black FAB / missing chrome icons).
+func EffectiveRemixAtlasSize() int32 {
+	if AndroidGLES() {
+		// 320: enough for shell chrome (home/search/user/add) without exceeding
+		// emulator max_texture_size when the warm set grows (was 1280→GL errors).
+		return 320
+	}
+	return scaleAtlasPx(RemixAtlasBasePx)
+}
 
 // EffectiveBitmapFontAtlasSize returns the bitmap UI font fallback atlas size.
-func EffectiveBitmapFontAtlasSize() int32 { return scaleAtlasPx(BitmapFontBasePx) }
+// Android skips SDF; baking near ~2× peak rem size keeps bilinear scale mild
+// (a 440px atlas drawn at ~45px looks soft/mushy on GLES).
+func EffectiveBitmapFontAtlasSize() int32 {
+	if AndroidGLES() {
+		return 112
+	}
+	return scaleAtlasPx(BitmapFontBasePx)
+}
 
 // EffectiveFTGreyAtlasSize is the greyscale Latin bake size (~48×DPI).
 func EffectiveFTGreyAtlasSize() int32 { return scaleAtlasPx(FTGreyAtlasBasePx) }
@@ -67,7 +87,15 @@ func EffectiveFTGreyAtlasSize() int32 { return scaleAtlasPx(FTGreyAtlasBasePx) }
 func InitDisplayAwareAtlases() {
 	ApplyRenderQualityFromEnv()
 	RefreshDisplayScale()
+	RefreshDensity()
 	atlasForGlyphScale = EffectiveGlyphDisplayScale()
+	androidDensityLogOnce.Do(func() {
+		if !AndroidGLES() {
+			return
+		}
+		gruLog("Gru: Android density=%.2f DisplayScale=%.2f glyphScale=%.2f Dp(48)=%.0f SSAA=%.2f",
+			Density(), DisplayScale, atlasForGlyphScale, Dp(48), EffectiveSupersamplingScale())
+	})
 	InitIcons(EffectiveRemixAtlasSize())
 	if LoadedUIFontPath == "" {
 		LoadedUIFontPath = firstExisting(resolvedFontCandidates()...)
@@ -75,8 +103,10 @@ func InitDisplayAwareAtlases() {
 	if PreferMSDFChrome() && InitMSDFFont(EffectiveFTGreyAtlasSize()) {
 		return
 	}
-	// S1: ft-grey (+ exact strikes) first — LCD shader/strikes attach on top.
-	// Classic LCD-only (no strikes) keeps the single scaled LCD atlas path.
+	// S1 (desktop + Android GLES): ft-grey (+ exact strikes / outline AA) first.
+	// LCD/DWrite attach only when available (Windows). Bitmap+SDF remain fallback
+	// (Android used to force bitmap-only — that skipped Medium/SemiBold soft-bold
+	// and outline bake lessons from linux-s1-text.md).
 	if PreferFTGreyStrikes() && PreferFTGreyChrome() && InitFTGreyFont(EffectiveFTGreyAtlasSize()) {
 		if PreferFTLCDChrome() {
 			_ = ensureFTLCDShader()
@@ -143,6 +173,7 @@ func reinitDisplayAwareAtlases() {
 // changes (e.g. window moved to another monitor). Returns true when reloaded.
 func ReinitDisplayAwareAtlasesIfNeeded() bool {
 	RefreshDisplayScale()
+	RefreshDensity()
 	next := EffectiveGlyphDisplayScale()
 	prev := atlasForGlyphScale
 	if prev > 0 && displayScaleNearlyEqual(next, prev) {

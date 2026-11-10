@@ -62,6 +62,10 @@ const ftLCDOpticalScale float32 = 0.93
 // (neighbor RGB) on Linux looks soft/fringed at 1:1 — greyscale sticky is
 // sharper there. Opt in anywhere with GRU_TEXT_LCD=1; opt out with =0.
 func PreferFTLCDChrome() bool {
+	// Desktop GLSL 330 ClearType mix shader — does not compile on OpenGL ES.
+	if AndroidGLES() {
+		return false
+	}
 	v := strings.ToLower(strings.TrimSpace(EnvOr("GRU_TEXT_LCD", "GORY_TEXT_LCD")))
 	switch v {
 	case "0", "off", "false", "no", "grey", "gray":
@@ -355,6 +359,9 @@ func blitFTLCDMask(atlas *image.RGBA, dst image.Rectangle, mask image.Image, mp 
 // ensureFTLCDShader loads the ClearType mix shader without building a scaled atlas.
 // Used by S1 LCD strikes (exact-size RGB atlases drawn through this shader).
 func ensureFTLCDShader() bool {
+	if AndroidGLES() {
+		return false
+	}
 	if ftLCDShader.ID != 0 {
 		return true
 	}

@@ -96,63 +96,71 @@ func shiftAppBarSlot(n Node, dy float32) {
 	shiftSubtreeY(n.Children(), dy)
 }
 
-// Layout positions leading/trailing slots and clamps to appBarDefaultH.
+func appBarHeight() float32 { return appBarDefaultH * PhoneChromeScale() }
+
+// Layout positions leading/trailing slots and clamps to appBarHeight.
 func (ab *AppBar) Layout() {
 	b := ab.Bounds()
-	if ab.IsAutoHeight() || b.Height > appBarDefaultH+0.5 {
-		b.Height = appBarDefaultH
+	wantH := appBarHeight()
+	if ab.IsAutoHeight() || b.Height > wantH+0.5 {
+		b.Height = wantH
 		ab.setBoundsNoMark(b)
 	}
-	innerH := appBarDefaultH - 8
+	innerH := wantH - 8*PhoneChromeScale()
 	innerY := b.Y + (b.Height-innerH)/2
+	padX := appBarPadX * PhoneChromeScale()
 
 	if ab.Leading != nil {
 		lw, lh := appBarSlotSize(ab.Leading, innerH)
-		lb := rl.NewRectangle(b.X+appBarPadX, innerY+(innerH-lh)/2, lw, lh)
+		lb := rl.NewRectangle(b.X+padX, innerY+(innerH-lh)/2, lw, lh)
 		ab.Leading.SetBounds(lb)
 		ab.Leading.Layout()
 	}
 
-	x := b.X + b.Width - appBarPadX
+	x := b.X + b.Width - padX
+	gap := appBarTrailingGap * PhoneChromeScale()
 	for i := len(ab.Trailing) - 1; i >= 0; i-- {
 		n := ab.Trailing[i]
 		nw, nh := appBarSlotSize(n, innerH)
 		x -= nw
 		n.SetBounds(rl.NewRectangle(x, innerY+(innerH-nh)/2, nw, nh))
 		n.Layout()
-		x -= appBarTrailingGap
+		x -= gap
 	}
 	ab.layoutDirty = false
 }
 
 func appBarSlotSize(n Node, maxH float32) (w, h float32) {
+	scale := PhoneChromeScale()
+	slotMax := float32(40) * scale
+	slotMin := float32(32) * scale
 	switch n.(type) {
 	case *IconButton:
 		h = maxH
-		if h > 40 {
-			h = 40
+		if h > slotMax {
+			h = slotMax
 		}
-		if h < 32 {
-			h = 32
+		if h < slotMin {
+			h = slotMin
 		}
 		ib := n.(*IconButton)
 		label := ib.Label.Get()
 		if label == "" {
 			return h, h // square icon-only control
 		}
-		return 88, h
+		return 88 * scale, h
 	case *Button:
 		h = maxH
-		if h > 40 {
-			h = 40
+		if h > slotMax {
+			h = slotMax
 		}
 		style := n.(*Button).GetStyle()
-		w = float32(measureTextS(n.(*Button).Text.Get(), style)) + 28
-		if w < 64 {
-			w = 64
+		w = float32(measureTextS(n.(*Button).Text.Get(), style)) + 28*scale
+		if w < 64*scale {
+			w = 64 * scale
 		}
-		if w > 120 {
-			w = 120
+		if w > 120*scale {
+			w = 120 * scale
 		}
 		return w, h
 	default:
@@ -160,7 +168,7 @@ func appBarSlotSize(n Node, maxH float32) (w, h float32) {
 		if b.Width > 0 && b.Height > 0 {
 			return b.Width, b.Height
 		}
-		return 40, maxH
+		return 40 * scale, maxH
 	}
 }
 
@@ -193,9 +201,9 @@ func (ab *AppBar) drawInternal() {
 	}
 	titleStyle.Bold = true
 
-	textX := b.X + appBarPadX
+	textX := b.X + appBarPadX*PhoneChromeScale()
 	if ab.Leading != nil {
-		textX = ab.Leading.Bounds().X + ab.Leading.Bounds().Width + appBarTitleGap
+		textX = ab.Leading.Bounds().X + ab.Leading.Bounds().Width + appBarTitleGap*PhoneChromeScale()
 	}
 	titleY := TextPosY(b, titleStyle)
 	drawTextS(title, int32(textX), titleY, titleStyle)

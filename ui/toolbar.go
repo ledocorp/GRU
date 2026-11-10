@@ -305,13 +305,25 @@ func (tb *Toolbar) ribbonCellScale() float32 {
 	if scale < 0.88 {
 		scale = 0.88
 	}
-	if scale > 1.12 {
-		scale = 1.12
+	// Desktop: keep ribbon dense. Android uses [Dp] cell sizes (see stackedCellW/H).
+	maxScale := float32(1.12)
+	if AndroidGLES() {
+		return Dp(PhoneRibbonCellWDp) / tbRibbonStackedCellW
+	}
+	if scale > maxScale {
+		scale = maxScale
 	}
 	return scale
 }
 
 func (tb *Toolbar) stackedCellW() float32 {
+	if AndroidGLES() {
+		w := Dp(PhoneRibbonCellWDp)
+		if w < Dp(PhoneTouchTargetMinDp) {
+			return Dp(PhoneTouchTargetMinDp)
+		}
+		return w
+	}
 	w := tbRibbonStackedCellW * tb.ribbonCellScale()
 	if w < 48 {
 		return 48
@@ -320,11 +332,37 @@ func (tb *Toolbar) stackedCellW() float32 {
 }
 
 func (tb *Toolbar) stackedCellH() float32 {
+	if AndroidGLES() {
+		// Fill the tool-strip band when section captions are hidden (mobile).
+		if !tb.showRibbonSectionLabels() {
+			_, bandH := tb.flatRowMetrics()
+			if bandH > 1 {
+				return bandH
+			}
+		}
+		return Dp(PhoneRibbonCellHDp)
+	}
 	h := tbRibbonStackedCellH * tb.ribbonCellScale()
 	if h < 44 {
 		return 44
 	}
 	return h
+}
+
+// chromePadH is left/right outer padding (density-tight on Android ribbon).
+func (tb *Toolbar) chromePadH() float32 {
+	if AndroidGLES() && tb.Ribbon {
+		return Dp(PhoneRibbonPadHDp)
+	}
+	return tbPad
+}
+
+// sectionGapH is horizontal gap between ribbon sections.
+func (tb *Toolbar) sectionGapH() float32 {
+	if AndroidGLES() && tb.Ribbon && tb.RibbonStacked {
+		return Dp(PhoneRibbonSectionGapDp)
+	}
+	return tbRibbonSectionGap
 }
 
 // ribbonCompactCustomH is the laid-out height for toolbar-menu TextInput/Dropdown cells (80% of icon cell).
@@ -408,10 +446,13 @@ func (tb *Toolbar) SetItemSuppressed(itemID string, suppressed bool) {
 // SelectRibbonTabForItem switches the active ribbon tab to the one that owns itemID
 // so a context cell (e.g. Settings → Back) is actually visible.
 func (tb *Toolbar) SelectRibbonTabForItem(itemID string) bool {
-	if tb == nil || !tb.Ribbon {
+	if tb == nil || !tb.Ribbon || tb.ActiveGroup == nil {
 		return false
 	}
 	for _, g := range tb.Groups {
+		if g.TabIndex < 0 {
+			continue
+		}
 		for _, item := range g.items {
 			if item.id != itemID {
 				continue
@@ -681,6 +722,9 @@ func (tb *Toolbar) itemGap() float32 {
 		return tb.ItemGap
 	}
 	if tb.Ribbon && tb.RibbonStacked {
+		if AndroidGLES() {
+			return Dp(PhoneRibbonItemGapDp)
+		}
 		return tbRibbonItemGap
 	}
 	return tbItemGap
@@ -705,12 +749,16 @@ func (tb *Toolbar) flatRowMetrics() (itemY, itemH float32) {
 func (tb *Toolbar) ribbonStackedMetrics() (bandY, bandPad, cellH, labelGap float32) {
 	itemY, bandH := tb.flatRowMetrics()
 	bandY = itemY
-	cellH = tb.stackedCellH()
 	labelGap = tbRibbonRowGap
 	if !tb.showRibbonSectionLabels() {
 		labelGap = 0
 	}
 	labelH := tb.ribbonSectionLabelHeight()
+	// Phone mobile strip: cell fills the band — no empty chrome above/below icons.
+	if AndroidGLES() && labelH < 1 && labelGap < 1 {
+		return bandY, 0, bandH, 0
+	}
+	cellH = tb.stackedCellH()
 	rest := bandH - cellH - labelGap - labelH
 	bandPad = rest / 2
 	if bandPad < 0 {
@@ -731,7 +779,7 @@ func (tb *Toolbar) overflowButtonRect() rl.Rectangle {
 	if oh < tbToggleH {
 		oh = tbToggleH
 	}
-	ox := b.X + b.Width - ow - tbPad
+	ox := b.X + b.Width - ow - tb.chromePadH()
 	oy := itemY + (itemH-oh)/2
 	return snapLayoutRect(rl.NewRectangle(ox, oy, ow, oh))
 }
@@ -888,9 +936,10 @@ func (tb *Toolbar) Layout() {
 	if tb.usesHorizontalScroll() && totalW > scrollViewport+0.5 {
 		tb.scrollActive = true
 	}
-	itemStartX := inner.X + tbScrollBW + tbPad
+	padH := tb.chromePadH()
+	itemStartX := inner.X + tbScrollBW + padH
 	if !tb.scrollActive {
-		itemStartX = inner.X + tbPad
+		itemStartX = inner.X + padH
 	}
 	if tb.scrollActive {
 		tb.refreshScrollChrome()
@@ -906,10 +955,11 @@ func (tb *Toolbar) Layout() {
 	for gi, g := range groups {
 		if gi > 0 {
 			if tb.Ribbon && tb.RibbonStacked {
+				secGap := tb.sectionGapH()
 				gapStart := b.X + cumW
-				sepX := snapLayoutUnit(gapStart + tbRibbonSectionGap/2)
+				sepX := snapLayoutUnit(gapStart + secGap/2)
 				tb.sectionSeparatorX = append(tb.sectionSeparatorX, sepX)
-				cumW = gapStart - b.X + tbRibbonSectionGap
+				cumW = gapStart - b.X + secGap
 			} else {
 				cumW += tbGroupGap*2 + tbSepW
 			}
@@ -1010,7 +1060,7 @@ func (tb *Toolbar) Layout() {
 		}
 	}
 
-	tb.contentWidth = cumW + tbPad
+	tb.contentWidth = cumW + tb.chromePadH()
 	if tb.usesHorizontalScroll() {
 		if tb.scrollActive {
 			tb.refreshScrollChrome()
@@ -1113,11 +1163,11 @@ func (tb *Toolbar) compactRibbonMinW(item *ToolbarItem) float32 {
 }
 
 func (tb *Toolbar) measureFlatTotalW(flat []toolbarItemMeta, groups []*ToolbarGroup) float32 {
-	totalW := tbPad * 2
+	totalW := tb.chromePadH() * 2
 	for gi, g := range groups {
 		if gi > 0 {
 			if tb.Ribbon && tb.RibbonStacked {
-				totalW += tbRibbonSectionGap
+				totalW += tb.sectionGapH()
 			} else {
 				totalW += tbGroupGap*2 + tbSepW
 			}
@@ -1149,7 +1199,7 @@ func (tb *Toolbar) itemsForGroupMeta(flat []toolbarItemMeta, g *ToolbarGroup) []
 // ribbonScrollViewport is the horizontal budget for ribbon items before scroll gutters.
 // Flex and scroll activation both use this so Search (find bar + icons) matches other tabs.
 func (tb *Toolbar) ribbonScrollViewport(inner rl.Rectangle, bw float32) float32 {
-	v := inner.Width - 2*bw - 2*tbPad
+	v := inner.Width - 2*bw - 2*tb.chromePadH()
 	if tb.usesHorizontalScroll() {
 		v -= tb.scrollGutterReserve()
 	}

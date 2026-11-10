@@ -25,6 +25,11 @@ Use this when you already know the kind of UI you need. Guides below teach; the 
 | [GETTING_STARTED.md](GETTING_STARTED.md) | Install, run `hello` / `webviewhello`, minimal frame loop, module import |
 | [CLI.md](CLI.md) | `gru new`, `gru build`, `gru package`, build tags |
 | [BUILD.md](BUILD.md) | Platform tags, assets/fonts, release layout |
+| [ANDROID_PHASE.md](ANDROID_PHASE.md) | Android milestones (M0–M4) — **M2 App Shell signed off** + verification log |
+| [ANDROID_CODE.md](ANDROID_CODE.md) | NativeActivity entry, tags, packaging layout |
+| [ANDROID_INSETS.md](ANDROID_INSETS.md) | Status/nav insets — NDK content-rect (verified) vs Fyne/GameActivity |
+| [ANDROID_WEBVIEW.md](ANDROID_WEBVIEW.md) | Full-window system WebView + Go JNI (not raylib) |
+| [ANDROID_FX.md](ANDROID_FX.md) | FX enhancement track (unblocked after M2) |
 
 Copy **`cmd/hello`** for a correct native loop before inventing your own.
 

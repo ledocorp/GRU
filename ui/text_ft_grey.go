@@ -346,7 +346,7 @@ func InitFTGreyFont(pixelSize int32) bool {
 	_ = face.Close()
 	if !ok {
 		ftGreyWarn.Do(func() {
-			fmt.Printf("Gru: ft-grey atlas failed (ink=%d) — staying on SDF\n", ink)
+			gruLog("Gru: ft-grey atlas failed (ink=%d) — staying on SDF", ink)
 		})
 		return false
 	}
@@ -371,20 +371,20 @@ func InitFTGreyFont(pixelSize int32) bool {
 		loadFTGreyChromeBoldFace(path)
 		ftGreyStrikeSSAAWarn.Do(func() {
 			if EffectiveSupersamplingScale() > 1.01 {
-				fmt.Println("Gru: ft-grey+strikes — dogfood with GRU_SSAA=1 (scene SSAA>1 fights exact strikes)")
+				gruLog("Gru: ft-grey+strikes — dogfood with GRU_SSAA=1 (scene SSAA>1 fights exact strikes)")
 			} else if PreferFTLCDChrome() && dwriteLCDAvailable() {
-				fmt.Println("Gru: ft-grey+strikes+dwrite-lcd hybrid @ SSAA 1× (ClearType+subX; Path A fallback)")
+				gruLog("Gru: ft-grey+strikes+dwrite-lcd hybrid @ SSAA 1× (ClearType+subX; Path A fallback)")
 			} else if PreferFTLCDChrome() {
-				fmt.Println("Gru: ft-grey+strikes+lcd hybrid @ SSAA 1× (lite LCD; Path A fallback)")
+				gruLog("Gru: ft-grey+strikes+lcd hybrid @ SSAA 1× (lite LCD; Path A fallback)")
 			} else {
-				fmt.Println("Gru: ft-grey+strikes hybrid @ SSAA 1× (sticky exact; Path A fallback)")
+				gruLog("Gru: ft-grey+strikes hybrid @ SSAA 1× (sticky exact; Path A fallback)")
 			}
 		})
 		if PreferFTLCDChrome() {
 			_ = ensureFTLCDShader()
 		}
 		prewarmFTGreyStickyStrikes()
-		fmt.Printf("Gru: ft-grey sticky strikes baked=%d bold=%d ladder=%v\n",
+		gruLog("Gru: ft-grey sticky strikes baked=%d bold=%d ladder=%v",
 			len(ftGreyStrikes), len(ftGreyBoldStrikes), stickyStrikeSizes())
 	} else {
 		ftGreyTTFData = nil
@@ -474,7 +474,7 @@ func loadFTGreyChromeBoldFace(regularPath string) {
 	ftGreyBoldPath = boldPath
 	ftGreyBoldTTFData = bdata
 	ftGreyBoldTTF = bttf
-	fmt.Printf("Gru: ft-grey chrome soft-bold %s (≤18 Medium / else SemiBold; Bold only as fallback)\n",
+	gruLog("Gru: ft-grey chrome soft-bold %s (≤18 Medium / else SemiBold; Bold only as fallback)",
 		baseName(boldPath))
 }
 

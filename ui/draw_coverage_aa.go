@@ -16,7 +16,11 @@ import (
 
 // PreferGeometryCoverageAA is true when scene SSAA cannot soften tessellated
 // chrome (S1 dogfood). See docs/GEOMETRY_AA_1X.md G1.1.
+// Off on Android GLES — coverage shaders are desktop GLSL 330 and fail to compile.
 func PreferGeometryCoverageAA() bool {
+	if AndroidGLES() {
+		return false
+	}
 	return EffectiveSupersamplingScale() <= 1.01
 }
 
@@ -150,6 +154,9 @@ void main() {
 }
 
 func ensureCoverageRRectShader() bool {
+	if AndroidGLES() {
+		return false
+	}
 	coverageRRectOnce.Do(func() {
 		if !ensureCoverageWhiteTex() {
 			return
@@ -170,6 +177,9 @@ func ensureCoverageRRectShader() bool {
 }
 
 func ensureCoverageRingShader() bool {
+	if AndroidGLES() {
+		return false
+	}
 	coverageRingOnce.Do(func() {
 		if !ensureCoverageWhiteTex() {
 			return

@@ -55,8 +55,10 @@ func AppBarLeadingMenu(id string) *ui.IconButton {
 
 // AppBarMenuButton returns a trailing overflow control (dots-three).
 func AppBarMenuButton(id string) *ui.IconButton {
-	btn := ui.NewIconButton(id, "", "", 0, 0, 44, 44)
+	btn := ui.NewIconButton(id, "⋮", "", 0, 0, 44, 44)
 	btn.SetStyle("appbar-icon")
 	btn.SetIcon(ui.IconDotsThree, ui.IconRegular)
+	btn.Symbol = "⋮" // fallback if Remix glyph missing on GLES
+	ui.Icons.EnsureLoaded(ui.IconDotsThree, ui.IconRegular)
 	return btn
 }

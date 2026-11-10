@@ -43,13 +43,14 @@ const (
 // the way web rem units do when the root font-size changes.
 var RootFontSize float32 = TypeScaleReference
 
-// SetRootFontSize sets 1rem (clamped 12–29). Call after startup or from app config.
+// SetRootFontSize sets 1rem (clamped 12–48). Call after startup or from app config.
+// Desktop fluid scale stays ≤26; Android phone rem needs up to ~40 for ~16sp body.
 func SetRootFontSize(px float32) {
 	if px < 12 {
 		px = 12
 	}
-	if px > 29 {
-		px = 29
+	if px > 48 {
+		px = 48
 	}
 	RootFontSize = px
 }
@@ -84,6 +85,9 @@ func typeScaleFactor() float32 {
 //
 // While [typeScaleResizeHold] is set, RootFontSize is frozen. Studio does not enable
 // hold on the hot path. The API remains for tests / specialized hosts.
+//
+// Android: desktop rem is too small at 420dpi (1080px ≈ 411dp). Target
+// ~16–18sp body (token 18 → ~42–47px) via a phone rem (see below).
 func RefreshTypeScaleFromWindow(w, h int32) {
 	if typeScaleResizeHold {
 		return
@@ -93,16 +97,28 @@ func RefreshTypeScaleFromWindow(w, h int32) {
 		dim = h
 	}
 	prev := RootFontSize
-	switch {
-	case dim >= TypeScaleXLWidthPx:
-		RootFontSize = TypeScaleXLRoot
-	case dim >= TypeScaleLargeWidthPx:
-		RootFontSize = TypeScaleLargeRoot
-	default:
-		RootFontSize = TypeScaleMinRoot
-	}
-	if RootFontSize < TypeScaleMinRoot {
-		RootFontSize = TypeScaleMinRoot
+	if AndroidGLES() {
+		// Phone rem on ~411dp (1080@420dpi): body ≈16–17sp (token 18 → ~45px).
+		// Chrome sizes use [Dp] / [Density] — do not multiply rem into chrome
+		// (docs/ANDROID_DENSITY.md).
+		RootFontSize = 40
+		if dim >= 1200 {
+			RootFontSize = 42
+		} else if dim < 720 {
+			RootFontSize = 36
+		}
+	} else {
+		switch {
+		case dim >= TypeScaleXLWidthPx:
+			RootFontSize = TypeScaleXLRoot
+		case dim >= TypeScaleLargeWidthPx:
+			RootFontSize = TypeScaleLargeRoot
+		default:
+			RootFontSize = TypeScaleMinRoot
+		}
+		if RootFontSize < TypeScaleMinRoot {
+			RootFontSize = TypeScaleMinRoot
+		}
 	}
 	if ShowTypeScaleOverlay && prev != RootFontSize {
 		LogTypographyReport("resize", w, h, nil)

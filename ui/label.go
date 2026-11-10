@@ -244,6 +244,10 @@ func (l *Label) drawInternal() {
 	if !useScissor && !l.Wrap && b.Width >= 8 && float32(measureTextS(text, style)) > b.Width-4 {
 		useScissor = true
 	}
+	// AndroidGLES: scissor Y flip is unreliable (see beginScissorMode); never clip.
+	if AndroidGLES() {
+		useScissor = false
+	}
 	if useScissor {
 		beginScissorFromRect(clip)
 	}

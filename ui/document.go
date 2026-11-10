@@ -187,6 +187,14 @@ func (d *Document) SetChromeTop(top float32) {
 	}
 }
 
+// ChromeBottom returns the reserved bottom inset (launcher nav / system gesture bar).
+func (d *Document) ChromeBottom() float32 {
+	if d == nil {
+		return 0
+	}
+	return d.chromeBottom
+}
+
 // SetChromeBottom reserves space at the bottom of the client area (launcher nav bar).
 func (d *Document) SetChromeBottom(bottom float32) {
 	if d == nil {
@@ -231,6 +239,27 @@ func (d *Document) fitRootChildrenToContent() {
 	}
 }
 
+// EnsureContentBand keeps Root and its direct children in the screen-absolute
+// content rect below ChromeTop / above ChromeBottom. Call before Layout on
+// Android each frame — MountEdgeToEdgeRoot starts children at Y=0, and a flex
+// pass with parent.Y=0 places BottomNav ~chromeTop too high for hit-testing
+// while pin-after-Update only fixes the draw rect.
+func (d *Document) EnsureContentBand(fullW, fullH int32) {
+	if d == nil || d.Root == nil {
+		return
+	}
+	if fullW < 1 || fullH < 1 {
+		return
+	}
+	contentH := d.contentHeight(fullH)
+	d.Width = fullW
+	d.Height = contentH
+	d.syncRootBounds(fullW, fullH)
+	if d.Root.LayoutType == LayoutAbsolute {
+		d.fitRootChildrenToContent()
+	}
+}
+
 // SyncBorderlessLayout applies chromeTop, root bounds, shell flex, and a full
 // layout pass. Call after toggling F9 or when the client size changes in
 // borderless mode.
@@ -242,7 +271,9 @@ func (d *Document) SyncBorderlessLayout(fullW, fullH int32) {
 	d.Width = fullW
 	d.Height = contentH
 	d.syncRootBounds(fullW, fullH)
-	d.fitRootChildrenToContent()
+	if d.Root.LayoutType == LayoutAbsolute {
+		d.fitRootChildrenToContent()
+	}
 	d.applyShellFlexAndSyncRootLayout()
 }
 
@@ -307,8 +338,8 @@ var ActiveBreakpoint = NewSignal(BreakpointXL)
 //     per-fragment depth comparison for every draw call.
 //   - DisableBackfaceCulling: raylib's 2D quads are always front-facing;
 //     the culling check is unnecessary work.
-//   - SetGesturesEnabled(0): gesture recognition is a touch/mobile feature;
-//     disabling it removes the per-frame OS gesture-tracking work on desktop.
+//   - SetGesturesEnabled(0) on desktop only: gesture recognition is a
+//     touch/mobile feature; keep it enabled on Android so tap/drag work.
 //
 // Audio: Gru intentionally does NOT call rl.InitAudioDevice(). Doing so
 // would open a system audio context and start an audio mixer thread even
@@ -317,7 +348,9 @@ var ActiveBreakpoint = NewSignal(BreakpointXL)
 func ApplyUIOptimizations() {
 	rl.DisableDepthTest()
 	rl.DisableBackfaceCulling()
-	rl.SetGesturesEnabled(0)
+	if !AndroidGLES() {
+		rl.SetGesturesEnabled(0)
+	}
 }
 
 // Add appends a node as a direct child of the absolute root. Demos that need
@@ -341,6 +374,8 @@ func (d *Document) SetFocus(node Node) {
 		ReleaseWebKeyboardFocus()
 		node.Emit(EventFocus, nil)
 	}
+	// Android: raise/dismiss soft keyboard with text focus (docs/ANDROID_DENSITY.md).
+	syncIMEForFocus(node)
 }
 
 // EnableUIRenderTexture turns the Document-level GPU cache on or off.
@@ -537,7 +572,9 @@ func (d *Document) Resize(fullW, fullH int32) {
 	if fullW < 1 || fullH < 1 {
 		return
 	}
-	if fullW < MinClientWidth {
+	// Desktop chrome assumes ≥ MinClientWidth; phone NativeActivity is often
+	// narrower in dp and must keep the real framebuffer width.
+	if !AndroidGLES() && fullW < MinClientWidth {
 		fullW = MinClientWidth
 	}
 	contentH := d.contentHeight(fullH)
@@ -546,7 +583,12 @@ func (d *Document) Resize(fullW, fullH int32) {
 	// the minimum width breaks redraw; RelayoutTreeForResize + shell flex is enough.
 	if d.Width == fullW && d.Height == contentH {
 		d.syncRootBounds(fullW, fullH)
-		d.fitRootChildrenToContent()
+		// Absolute roots keep explicit child bounds; flex roots (hello, app shells)
+		// must NOT be force-filled to the content rect before layoutFlex runs —
+		// that stamped full-window height onto AutoHeight cards on Android.
+		if d.Root != nil && d.Root.LayoutType == LayoutAbsolute {
+			d.fitRootChildrenToContent()
+		}
 		d.relayoutShellsForResize()
 		d.applyShellFlexAndSyncRootLayout()
 		return
@@ -554,7 +596,9 @@ func (d *Document) Resize(fullW, fullH int32) {
 	d.Width = fullW
 	d.Height = contentH
 	d.syncRootBounds(fullW, fullH)
-	d.fitRootChildrenToContent()
+	if d.Root != nil && d.Root.LayoutType == LayoutAbsolute {
+		d.fitRootChildrenToContent()
+	}
 	d.relayoutShellsForResize()
 	d.applyShellFlexAndSyncRootLayout()
 }
